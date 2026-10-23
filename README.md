@@ -21,7 +21,7 @@ Say "remember that <note>" to save a note on this phone. Say "what do you rememb
 - Downloads are fetched over HTTPS from pinned Hugging Face commits. Each file must match its pinned size and sha256 before it is accepted. Interrupted or cancelled downloads keep their partial file and resume from it on the next attempt (HTTP Range). A size or checksum mismatch deletes the partial file.
 - Models are stored in the app's private internal storage (filesDir/models), not on external or shared storage. Delete a model in Settings > Models to free its space.
 
-Status: v0.2.1. Models screen added, resumable model downloads. The native pins and Kotlin/JNI signatures were reviewed statically, but the app has NOT been compiled with the Android toolchain or run on a device yet. Expect first-build friction.
+Status: v0.3.0 (device commands, widget, quick settings tile added). Models screen added, resumable model downloads. The native pins and Kotlin/JNI signatures were reviewed statically, but the app has NOT been compiled with the Android toolchain or run on a device yet. Expect first-build friction.
 
 ## Stack
 - Kotlin + Jetpack Compose UI (push-to-talk, minSdk 26, arm64-v8a)
@@ -54,9 +54,38 @@ Battery: the KWS loop is one CPU thread running continuously with the mic open. 
 
 Some models ship as archives (tar.bz2 or zip). ModelDownloader streams the archive, extracts only the members pinned in ModelCatalog, and verifies each extracted file's size and sha256 individually before moving it into place. Any mismatch deletes every file for that model and fails closed. The archive itself is deleted after extraction.
 
+## Device commands (voice)
+
+Say one of these and the phone does it with a standard Android app. Each reply is spoken and shown on screen. Anything that does not match falls through to normal chat.
+
+- "set an alarm for 6am" or "set alarm for 6:30 pm": ACTION_SET_ALARM, with the clock app's skip-UI flag so it sets silently.
+- "set a timer for 10 minutes" (seconds, minutes or hours): ACTION_SET_TIMER.
+- "call <contact name>": looks the number up in your contacts and opens the dialer with it. Nothing is placed automatically; you tap call. A raw number like "call 0801 234 5678" skips the lookup. If several contacts match, it lists them and asks for the full name.
+- "open <app>": launches a curated list (WhatsApp, YouTube, Chrome, Gmail, Maps, Spotify, Settings, Play Store, Photos, Calendar). Any other app opens the system app chooser so you pick it.
+- "add reminder <text> at 5pm" or "... in 10 minutes": a local notification scheduled with AlarmManager (setExactAndAllowWhileIdle when exact alarms are allowed, otherwise an approximate alarm and the app says so). With no time spoken, it asks when.
+
+Everything is resolved on the phone with public intents. No network is used.
+
+Permissions added for these features, and why:
+- READ_CONTACTS: only for "call <name>", to find the number. Requested the first time you ask. Contacts are not stored or sent.
+- POST_NOTIFICATIONS (Android 13+): to show the reminder notification. Requested when you first set a reminder.
+- SCHEDULE_EXACT_ALARM: so reminders fire on the minute. You can revoke it in system settings; the app then uses approximate timing.
+- A <queries> block listing the 10 curated app packages, so the app can see whether they are installed. No other app list is read.
+
+## Home screen widget and quick settings tile
+
+- Widget "Mercureal listen": one "tap to talk" button. Tapping it opens the app in listening mode and starts one turn. This is the tap fallback: widgets cannot receive press-and-hold, so the button does not hold the mic. The widget is plain RemoteViews, not Glance, to avoid adding a dependency.
+- Quick settings tile "Mercureal listen": add it from the notification shade edit panel. Tapping it does the same as the widget. It does not keep the mic open in the background.
+Both launch MainActivity with the LISTEN action. They do not add any permission.
+
+## Device test gaps (not yet run on hardware)
+- Alarm and timer: whether the default clock app on your phone accepts the skip-UI extra and sets the value silently.
+- Dialer: the contact lookup and the dialer handoff on a real contact list.
+- Reminders: exact timing with the doze mode on, and the permission prompt flow.
+- The widget and tile have only been compiled, not placed on a home screen.
+
 ## Roadmap
 - Streaming LLM output and barge-in
-- Tool intents on-device (timers, notes, reminders) without network
 - Checksums for the native submodules, and an on-device check that a model file loads before it is marked active
 
 Sister project: [mercureal-voice](https://github.com/Ahmadns7/mercureal-voice) (offline voice control for Android).

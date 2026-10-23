@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mercureal</string>
+    <string name="widget_button">tap to talk</string>
+    <string name="widget_description">Tap to ask Mercureal by voice. Works offline.</string>
+    <string name="widget_label">Mercureal listen</string>
+    <string name="tile_label">Mercureal listen</string>
+</resources>

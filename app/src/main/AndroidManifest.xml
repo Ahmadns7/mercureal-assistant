@@ -17,6 +17,42 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+        READ_CONTACTS: only to look up a contact's number for "call <name>". Read on device,
+        never stored or sent. Requested at the moment the command needs it.
+    -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!--
+        POST_NOTIFICATIONS (Android 13+): shows the local reminder notification. Requested the
+        first time a reminder is set.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+        SCHEDULE_EXACT_ALARM: lets reminders fire at the exact minute (setExactAndAllowWhileIdle).
+        Special permission the user can revoke in system settings; without it, reminders fall back
+        to approximate timing and the app says so.
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!--
+        Package visibility for the curated "open <app>" list (DeviceActions.CURATED_APPS). Only
+        these launcher packages are looked up; no other app list is read.
+    -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.android.chrome" />
+        <package android:name="com.google.android.gm" />
+        <package android:name="com.google.android.apps.maps" />
+        <package android:name="com.spotify.music" />
+        <package android:name="com.android.settings" />
+        <package android:name="com.android.vending" />
+        <package android:name="com.google.android.apps.photos" />
+        <package android:name="com.google.android.calendar" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:label="Mercureal Assistant"
@@ -24,12 +60,42 @@
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Home screen widget: tap to open the app in listening mode. -->
+        <receiver
+            android:name=".widget.ListenWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/listen_widget_info" />
+        </receiver>
+
+        <!-- Quick settings tile: "Mercureal listen". Only the system can bind it. -->
+        <service
+            android:name=".tile.ListenTileService"
+            android:exported="true"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Local reminder notifications. Not exported. -->
+        <receiver
+            android:name="com.ahmadns7.mercureal.assistant.commands.Reminders$ReminderReceiver"
+            android:exported="false" />
         <service
             android:name=".wake.WakeWordService"
             android:exported="false"

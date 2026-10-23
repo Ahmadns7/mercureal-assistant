@@ -2,6 +2,9 @@ package com.ahmadns7.mercureal.assistant
 
 import android.content.Context
 import com.ahmadns7.mercureal.assistant.audio.MicRecorder
+import com.ahmadns7.mercureal.assistant.commands.DeviceActions
+import com.ahmadns7.mercureal.assistant.commands.DeviceCommand
+import com.ahmadns7.mercureal.assistant.commands.DeviceCommands
 import com.ahmadns7.mercureal.assistant.audio.VoiceActivityCapture
 import com.ahmadns7.mercureal.assistant.engine.LlmEngine
 import com.ahmadns7.mercureal.assistant.engine.SttEngine
@@ -47,6 +50,10 @@ class AssistantController(context: Context, val repo: ModelRepository) {
     private val stt = SttEngine()
     private val llm = LlmEngine()
     private val tts = Tts(context, repo.store)
+    private val deviceActions = DeviceActions(context) { perm -> permissionRequester?.invoke(perm) }
+
+    /** Set by the activity: shows a runtime permission prompt for device commands. */
+    @Volatile var permissionRequester: ((String) -> Unit)? = null
 
     /** Held for a whole turn or conversation session, so turns never overlap. */
     private val turnLock = Mutex()
@@ -168,6 +175,19 @@ class AssistantController(context: Context, val repo: ModelRepository) {
                 }
             } else {
                 state.reply = "$translated\n(${target.name}: shown on screen only, the voice is English-only)"
+            }
+            return true
+        }
+
+        val device = DeviceCommands.parse(text)
+        if (device !is DeviceCommand.None) {
+            val reply = deviceActions.run(device) ?: "ok"
+            state.reply = reply
+            state.label = "speaking"
+            try {
+                withContext(Dispatchers.IO) { tts.speak(reply) }
+            } finally {
+                quietUntil = System.currentTimeMillis() + ECHO_TAIL_MS
             }
             return true
         }

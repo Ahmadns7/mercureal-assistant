@@ -33,6 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import android.content.Intent
+import com.ahmadns7.mercureal.assistant.ListenIntents
 import com.ahmadns7.mercureal.assistant.model.ModelCatalog
 import com.ahmadns7.mercureal.assistant.model.ModelRepository
 import com.ahmadns7.mercureal.assistant.model.ModelSettings
@@ -53,11 +55,30 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { granted -> if (granted) assistant.startListening() }
 
+    private val extraPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* the user repeats the command after granting */ }
+
+    private fun handleListenIntent(intent: Intent?) {
+        if (intent?.action != ListenIntents.ACTION_LISTEN) return
+        val hasMic = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (hasMic) assistant.startListening() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleListenIntent(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         repo = ModelRepository(applicationContext)
         assistant = AssistantController(applicationContext, repo)
         AssistantRegistry.controller = assistant
+        assistant.permissionRequester = { perm -> extraPermission.launch(perm) }
+        handleListenIntent(intent)
 
         setContent {
             MaterialTheme {
