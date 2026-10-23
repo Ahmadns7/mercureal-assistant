@@ -1,6 +1,17 @@
 package com.ahmadns7.mercureal.assistant.model
 
-enum class ModelKind { STT, LLM, TTS }
+enum class ModelKind { STT, LLM, TTS, KWS }
+
+/** Archive container of a download. The archive itself is pinned by sha256; each member is pinned too. */
+enum class ArchiveFormat { TAR_BZ2, ZIP }
+
+/** One file inside an archive. Only members listed here are extracted; everything else is ignored. */
+data class ArchiveMember(
+    val path: String,
+    val fileName: String,
+    val sizeBytes: Long,
+    val sha256: String,
+)
 
 /** Chat template used to wrap the prompt for an instruct LLM. */
 enum class PromptFormat { CHATML, LLAMA3 }
@@ -21,9 +32,14 @@ data class ModelSpec(
     val licenseUrl: String,
     val source: String,
     val promptFormat: PromptFormat? = null,
+    /** When set, [url] is an archive: it is verified, stream-extracted into [members], then deleted. */
+    val archive: ArchiveFormat? = null,
+    val members: List<ArchiveMember> = emptyList(),
 )
 
 object ModelCatalog {
+
+    const val KWS_ID = "kws-zipformer-zh-en-3m-int8"
 
     const val DEFAULT_STT = "whisper-tiny.en"
     const val DEFAULT_LLM = "qwen2.5-0.5b-instruct-q4_k_m"
@@ -46,6 +62,45 @@ object ModelCatalog {
     private const val VITS_LJS_REPO = "https://huggingface.co/csukuangfj/vits-ljs"
 
     val all: List<ModelSpec> = listOf(
+        ModelSpec(
+            id = KWS_ID,
+            kind = ModelKind.KWS,
+            displayName = "Wake word model: sherpa-onnx zipformer zh-en 3M (int8 encoder, chunk-16)",
+            fileName = "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20.tar.bz2",
+            url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20.tar.bz2",
+            sizeBytes = 32_885_699L,
+            sha256 = "68447f4fbc67e70eee3a93961f36e81e98f47aef73ce7e7ca00885c6cd3616a6",
+            license = "Apache-2.0",
+            licenseUrl = "https://github.com/k2-fsa/sherpa-onnx",
+            source = "k2-fsa/sherpa-onnx kws-models release, 2025-12-20. Archive is extracted; only 4 files are kept (about 5.4 MB).",
+            archive = ArchiveFormat.TAR_BZ2,
+            members = listOf(
+                ArchiveMember(
+                    path = "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx",
+                    fileName = "kws-encoder.int8.onnx",
+                    sizeBytes = 4_599_656L,
+                    sha256 = "408bbd740838c42d5bf6d1c5b80b3c88b616c7860b92d980328b5b068c76ae48",
+                ),
+                ArchiveMember(
+                    path = "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/decoder-epoch-13-avg-2-chunk-16-left-64.onnx",
+                    fileName = "kws-decoder.onnx",
+                    sizeBytes = 759_829L,
+                    sha256 = "63a22dd60f40fff082ac3e09afa507f6787da36df76ded2fbe145fa233e22c21",
+                ),
+                ArchiveMember(
+                    path = "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx",
+                    fileName = "kws-joiner.int8.onnx",
+                    sizeBytes = 86_629L,
+                    sha256 = "190d4067b4cc20b72a42a1916e69d92052000fb7051a427ebb1bc72a69207dc1",
+                ),
+                ArchiveMember(
+                    path = "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/tokens.txt",
+                    fileName = "kws-tokens.txt",
+                    sizeBytes = 1_928L,
+                    sha256 = "2d3f32311f9b692b964da3c90e830258d3e78e013cb0c992dbfb15cd5a1a71b0",
+                ),
+            ),
+        ),
         ModelSpec(
             id = "vits-ljs-int8",
             kind = ModelKind.TTS,

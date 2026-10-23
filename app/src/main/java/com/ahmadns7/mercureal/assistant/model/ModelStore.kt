@@ -15,11 +15,18 @@ class ModelStore(context: Context) {
 
     fun partFileFor(spec: ModelSpec): File = File(dir, spec.fileName + ".part")
 
+    /** A file inside the models directory by its name (archive members, keyword files). */
+    fun dirFile(name: String): File = File(dir, name)
+
     /**
-     * Installed means the final file exists at the exact pinned size. The sha256 was checked
-     * before the file was moved into place (see ModelDownloader), so only verified files get this name.
+     * Installed means the final file exists at the exact pinned size. For an archive model the
+     * archive is deleted after extraction, so installed means every extracted member is present at
+     * its pinned size. Each file was sha256-checked before it was moved into place (see ModelDownloader).
      */
     fun isInstalled(spec: ModelSpec): Boolean {
+        if (spec.members.isNotEmpty()) {
+            return spec.members.all { m -> dirFile(m.fileName).let { it.isFile && it.length() == m.sizeBytes } }
+        }
         val f = fileFor(spec)
         return f.isFile && f.length() == spec.sizeBytes
     }
@@ -33,6 +40,10 @@ class ModelStore(context: Context) {
     fun delete(spec: ModelSpec) {
         fileFor(spec).delete()
         partFileFor(spec).delete()
+        spec.members.forEach { m ->
+            dirFile(m.fileName).delete()
+            dirFile(m.fileName + ".part").delete()
+        }
     }
 
     /** Directory for TTS companion files (tokens, lexicon) staged from the app's bundled assets. */

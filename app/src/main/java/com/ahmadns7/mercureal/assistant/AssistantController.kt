@@ -24,7 +24,7 @@ import kotlinx.coroutines.withContext
  * The active STT/LLM are read from settings each turn, so a switch in
  * Settings > Models takes effect on the next utterance.
  */
-class AssistantController(context: Context, private val repo: ModelRepository) {
+class AssistantController(context: Context, val repo: ModelRepository) {
 
     val state = AssistantState()
 
@@ -33,6 +33,8 @@ class AssistantController(context: Context, private val repo: ModelRepository) {
     private val stt = SttEngine()
     private val llm = LlmEngine()
     private val tts = Tts(context, repo.store)
+
+    private val turnActive = java.util.concurrent.atomic.AtomicBoolean(false)
 
     private var loadedStt: String? = null
     private var loadedLlm: String? = null
@@ -44,8 +46,23 @@ class AssistantController(context: Context, private val repo: ModelRepository) {
         recorder.start()
     }
 
+    /**
+     * Wake-word hand-off: runs the same whisper -> llama -> TTS path on an utterance captured after
+     * the keyword fired. Returns false (and drops the audio) if a turn is already running.
+     */
+    fun answerUtterance(pcm: FloatArray): Boolean {
+        if (turnActive.getAndSet(true)) return false
+        runTurn(pcm)
+        return true
+    }
+
     fun stopListeningAndAnswer() {
         val pcm = recorder.stop()
+        if (turnActive.getAndSet(true)) return
+        runTurn(pcm)
+    }
+
+    private fun runTurn(pcm: FloatArray) {
         scope.launch {
             try {
                 ensureModelsLoaded()
@@ -64,6 +81,8 @@ class AssistantController(context: Context, private val repo: ModelRepository) {
                 state.label = "idle"
             } catch (e: Exception) {
                 state.label = "error: ${e.message}"
+            } finally {
+                turnActive.set(false)
             }
         }
     }

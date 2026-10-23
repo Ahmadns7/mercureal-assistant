@@ -64,4 +64,6 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     // Offline TTS (sherpa-onnx 2.0.0, prebuilt arm64 AAR; see scripts/setup_native.sh for the pin)
     implementation(files("libs/sherpa-onnx-2.0.0.aar"))
+    // Archive extraction for model downloads (tar.bz2, zip). Verified per member by sha256.
+    implementation("org.apache.commons:commons-compress:1.27.1")
 }

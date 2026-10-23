@@ -28,8 +28,21 @@ Curated models (all pinned to a specific Hugging Face commit):
 - LLM: Qwen2.5-0.5B-Instruct Q4_K_M (about 491 MB, Apache-2.0). Source: Qwen/Qwen2.5-0.5B-Instruct-GGUF.
 - LLM: Llama-3.2-1B-Instruct Q4_K_M (about 808 MB, Llama 3.2 Community License). Source: bartowski/Llama-3.2-1B-Instruct-GGUF.
 
+## Wake word ("ahmad")
+
+Always-on keyword spotting runs fully offline with sherpa-onnx KWS (zipformer, zh-en 3M, int8 encoder, chunk-16, about 5.4 MB kept after extraction). It is off by default. Turn it on in Settings or on the main screen once the "Wake word" model is downloaded in Models.
+
+Keywords are phoneme lines in app/src/main/assets/wake/keywords.txt (AA1 M AA1 D and AH0 M AA1 D, plus AH0 M EH1 D and AA1 M AE1 D alternates). Tuning is a file swap: change the lines, rebuild.
+
+While on, a foreground service with a persistent "Mercureal wake word on" notification keeps the microphone open (foregroundServiceType=microphone). Only the small KWS model runs continuously. On a hit it captures up to 6 seconds of speech (or stops after about 0.9 seconds of silence) and hands that audio to the existing whisper, llama and TTS path. If the keyword model or keywords file is missing, the service fails closed and the toggle switches back off.
+
+Battery: the KWS loop is one CPU thread running continuously with the mic open. No battery measurement has been taken yet.
+
+## Archive model downloads
+
+Some models ship as archives (tar.bz2 or zip). ModelDownloader streams the archive, extracts only the members pinned in ModelCatalog, and verifies each extracted file's size and sha256 individually before moving it into place. Any mismatch deletes every file for that model and fails closed. The archive itself is deleted after extraction.
+
 ## Roadmap
-- Real hotword / wake word (currently push-to-talk only)
 - Streaming LLM output and barge-in
 - Tool intents on-device (timers, notes, reminders) without network
 - Checksums for the native submodules, and an on-device check that a model file loads before it is marked active

@@ -1,6 +1,7 @@
 package com.ahmadns7.mercureal.assistant.model
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -15,6 +16,14 @@ class ModelSettings(private val context: Context) {
     private val sttKey = stringPreferencesKey("active_stt")
     private val llmKey = stringPreferencesKey("active_llm")
     private val ttsKey = stringPreferencesKey("active_tts")
+    private val wakeKey = booleanPreferencesKey("wake_word_on")
+
+    /** Whether the always-on wake word service should run. Off by default. */
+    val wakeOn: Flow<Boolean> = context.modelSettingsStore.data.map { it[wakeKey] ?: false }
+
+    suspend fun setWakeOn(on: Boolean) {
+        context.modelSettingsStore.edit { it[wakeKey] = on }
+    }
 
     val activeStt: Flow<String> = context.modelSettingsStore.data.map {
         resolve(it[sttKey], ModelKind.STT, ModelCatalog.DEFAULT_STT)

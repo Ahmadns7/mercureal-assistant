@@ -94,6 +94,23 @@ fun ModelsScreen(repo: ModelRepository, onBack: () -> Unit) {
         }
 
         item {
+            Text("Wake word (sherpa-onnx keyword spotting)", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+        }
+        items(ModelCatalog.ofKind(ModelKind.KWS), key = { it.id }) { spec ->
+            ModelCard(
+                spec = spec,
+                isInstalled = spec.id in installed,
+                isActive = true,
+                download = downloads[spec.id],
+                partialBytes = repo.store.partialBytesFor(spec),
+                onDownload = { repo.download(spec) },
+                onCancel = { repo.cancel(spec) },
+                onUse = {},
+                onDelete = { scope.launch(Dispatchers.IO) { repo.delete(spec) } },
+            )
+        }
+
+        item {
             Text(
                 "Text to speech (sherpa-onnx, offline)",
                 style = MaterialTheme.typography.titleMedium,

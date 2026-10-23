@@ -1,5 +1,11 @@
 package com.ahmadns7.mercureal.assistant.model
 
+import org.apache.commons.compress.archivers.ArchiveInputStream
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
+import java.io.BufferedInputStream
+import java.io.FileInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -67,6 +73,72 @@ object ModelDownloader {
         val dest = store.fileFor(spec)
         dest.delete()
         if (!part.renameTo(dest)) error("could not move the verified file into place")
+        if (spec.archive != null) extractMembers(spec, dest, store)
+    }
+
+    private fun openArchive(format: ArchiveFormat, file: File): ArchiveInputStream<*> = when (format) {
+        ArchiveFormat.TAR_BZ2 -> TarArchiveInputStream(
+            BZip2CompressorInputStream(BufferedInputStream(FileInputStream(file)))
+        )
+        ArchiveFormat.ZIP -> ZipArchiveInputStream(BufferedInputStream(FileInputStream(file)))
+    }
+
+    /**
+     * Stream-extracts the verified archive. Only entries named in spec.members are written, and each
+     * one is size- and sha256-checked against its pin before it is renamed into place. Any failure
+     * removes every member, and the archive is deleted in all cases so no unverified data is left.
+     */
+    private fun extractMembers(spec: ModelSpec, archive: File, store: ModelStore) {
+        val format = spec.archive ?: return
+        val expected = spec.members.associateBy { it.path }
+        val written = HashSet<String>()
+        try {
+            openArchive(format, archive).use { ais ->
+                while (true) {
+                    val entry = ais.nextEntry ?: break
+                    if (entry.isDirectory) continue
+                    val member = expected[entry.name] ?: continue
+                    val tmp = store.dirFile(member.fileName + ".part")
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    var size = 0L
+                    FileOutputStream(tmp).use { out ->
+                        val buf = ByteArray(BUF_SIZE)
+                        while (true) {
+                            val n = ais.read(buf)
+                            if (n < 0) break
+                            size += n
+                            if (size > member.sizeBytes) {
+                                throw ModelVerificationException("${member.fileName}: larger than pinned size")
+                            }
+                            out.write(buf, 0, n)
+                            digest.update(buf, 0, n)
+                        }
+                    }
+                    if (size != member.sizeBytes) {
+                        throw ModelVerificationException("${member.fileName}: size ${size}, expected ${member.sizeBytes}")
+                    }
+                    val hex = digest.digest().joinToString("") { "%02x".format(it) }
+                    if (!hex.equals(member.sha256, ignoreCase = true)) {
+                        throw ModelVerificationException("${member.fileName}: checksum mismatch")
+                    }
+                    val dest = store.dirFile(member.fileName)
+                    dest.delete()
+                    if (!tmp.renameTo(dest)) error("could not move ${member.fileName} into place")
+                    written += member.path
+                }
+            }
+            val missing = expected.keys - written
+            if (missing.isNotEmpty()) throw ModelVerificationException("archive is missing ${missing.size} expected file(s)")
+        } catch (e: Exception) {
+            spec.members.forEach {
+                store.dirFile(it.fileName).delete()
+                store.dirFile(it.fileName + ".part").delete()
+            }
+            throw if (e is ModelVerificationException) e
+            else ModelVerificationException("archive extraction failed: ${e.message}")
+        } finally {
+            archive.delete()
+        }
     }
 
     /**
