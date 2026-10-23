@@ -33,6 +33,7 @@ import androidx.core.content.ContextCompat
 import com.ahmadns7.mercureal.assistant.model.ModelRepository
 import com.ahmadns7.mercureal.assistant.ui.AssistantState
 import com.ahmadns7.mercureal.assistant.ui.ModelsScreen
+import com.ahmadns7.mercureal.assistant.model.ModelCatalog
 import com.ahmadns7.mercureal.assistant.wake.AssistantRegistry
 import com.ahmadns7.mercureal.assistant.wake.WakeWordService
 import androidx.compose.runtime.collectAsState
