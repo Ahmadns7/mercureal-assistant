@@ -15,8 +15,10 @@ set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 
-add_subdirectory(${WHISPER_DIR} whisper_build)
+# llama.cpp first: both trees vendor ggml and whisper guards its ggml build with
+# "if (NOT TARGET ggml)", so adding llama first makes its (newer) ggml the single shared copy.
 add_subdirectory(${LLAMA_DIR} llama_build)
+add_subdirectory(${WHISPER_DIR} whisper_build)
 
 add_library(mercureal_native SHARED
     jni/whisper_jni.cpp
@@ -25,7 +27,6 @@ add_library(mercureal_native SHARED
 
 target_include_directories(mercureal_native PRIVATE
     ${WHISPER_DIR}/include
-    ${WHISPER_DIR}/ggml/include
     ${LLAMA_DIR}/include
 )
 
