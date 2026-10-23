@@ -17,9 +17,10 @@ class LlmEngine {
         format = promptFormat
     }
 
-    fun respond(userText: String): String {
+    /** [memory] is extra system context (the user's saved notes), or null for a plain turn. */
+    fun respond(userText: String, memory: String? = null): String {
         check(ctx != 0L) { "llm not loaded" }
-        return nativeGenerate(ctx, buildPrompt(userText), MAX_REPLY_TOKENS).trim()
+        return nativeGenerate(ctx, buildPrompt(userText, memory), MAX_REPLY_TOKENS).trim()
     }
 
     fun close() {
@@ -31,14 +32,19 @@ class LlmEngine {
 
     // Chat templates for the curated instruct models.
     // Special tokens are written as unicode escapes so they survive source handling.
-    private fun buildPrompt(userText: String): String = when (format) {
+    private fun buildPrompt(userText: String, memory: String?): String {
+        val system = if (memory.isNullOrBlank()) SYSTEM else "$SYSTEM\n\n$memory"
+        return buildPromptFor(system, userText)
+    }
+
+    private fun buildPromptFor(system: String, userText: String): String = when (format) {
         PromptFormat.CHATML ->
-            "\u003C|im_start|\u003Esystem\n$SYSTEM\u003C|im_end|\u003E\n" +
+            "\u003C|im_start|\u003Esystem\n$system\u003C|im_end|\u003E\n" +
                 "\u003C|im_start|\u003Euser\n$userText\u003C|im_end|\u003E\n" +
                 "\u003C|im_start|\u003Eassistant\n"
         PromptFormat.LLAMA3 ->
             "\u003C|begin_of_text|\u003E" +
-                "\u003C|start_header_id|\u003Esystem\u003C|end_header_id|\u003E\n\n$SYSTEM\u003C|eot_id|\u003E" +
+                "\u003C|start_header_id|\u003Esystem\u003C|end_header_id|\u003E\n\n$system\u003C|eot_id|\u003E" +
                 "\u003C|start_header_id|\u003Euser\u003C|end_header_id|\u003E\n\n$userText\u003C|eot_id|\u003E" +
                 "\u003C|start_header_id|\u003Eassistant\u003C|end_header_id|\u003E\n\n"
     }

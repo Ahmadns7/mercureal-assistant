@@ -92,15 +92,28 @@ class WakeWordService : Service() {
         val chunk = ShortArray(minBuf / 2)
         val floats = FloatArray(chunk.size)
         rec.startRecording()
+        var open = true
         try {
             while (running) {
+                // A conversation session owns the mic: release ours until it ends.
+                if (AssistantRegistry.controller?.micInUse == true) {
+                    if (open) { rec.stop(); open = false }
+                    Thread.sleep(150)
+                    continue
+                }
+                if (!open) { rec.startRecording(); open = true }
+                // Replies are spoken in this same room: do not treat our own voice as a keyword.
+                if (AssistantRegistry.controller?.isSpeakingOrEcho() == true) {
+                    Thread.sleep(100)
+                    continue
+                }
                 val n = rec.read(chunk, 0, chunk.size)
                 if (n <= 0) continue
                 for (i in 0 until n) floats[i] = chunk[i] / 32768f
                 if (det.accept(floats.copyOf(n))) onKeyword(rec)
             }
         } finally {
-            rec.stop()
+            if (open) rec.stop()
             rec.release()
         }
     }

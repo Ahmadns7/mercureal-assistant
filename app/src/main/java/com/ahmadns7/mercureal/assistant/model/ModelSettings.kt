@@ -3,6 +3,7 @@ package com.ahmadns7.mercureal.assistant.model
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -17,12 +18,31 @@ class ModelSettings(private val context: Context) {
     private val llmKey = stringPreferencesKey("active_llm")
     private val ttsKey = stringPreferencesKey("active_tts")
     private val wakeKey = booleanPreferencesKey("wake_word_on")
+    private val conversationKey = booleanPreferencesKey("conversation_on")
+    private val followUpKey = intPreferencesKey("follow_up_seconds")
 
     /** Whether the always-on wake word service should run. Off by default. */
     val wakeOn: Flow<Boolean> = context.modelSettingsStore.data.map { it[wakeKey] ?: false }
 
     suspend fun setWakeOn(on: Boolean) {
         context.modelSettingsStore.edit { it[wakeKey] = on }
+    }
+
+    /** Continuous conversation: keep listening for follow-ups after each reply. On by default. */
+    val conversationOn: Flow<Boolean> = context.modelSettingsStore.data.map { it[conversationKey] ?: true }
+
+    suspend fun setConversationOn(on: Boolean) {
+        context.modelSettingsStore.edit { it[conversationKey] = on }
+    }
+
+    /** Silence (seconds) that ends a follow-up window. Allowed: 30, 60, 120. Default 60. */
+    val followUpSeconds: Flow<Int> = context.modelSettingsStore.data.map {
+        (it[followUpKey] ?: 60).takeIf { s -> s in FOLLOW_UP_OPTIONS } ?: 60
+    }
+
+    suspend fun setFollowUpSeconds(seconds: Int) {
+        require(seconds in FOLLOW_UP_OPTIONS)
+        context.modelSettingsStore.edit { it[followUpKey] = seconds }
     }
 
     val activeStt: Flow<String> = context.modelSettingsStore.data.map {
@@ -51,4 +71,8 @@ class ModelSettings(private val context: Context) {
 
     private fun resolve(saved: String?, kind: ModelKind, default: String): String =
         if (saved != null && ModelCatalog.byId(saved)?.kind == kind) saved else default
+
+    companion object {
+        val FOLLOW_UP_OPTIONS = listOf(30, 60, 120)
+    }
 }

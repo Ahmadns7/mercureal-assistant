@@ -18,27 +18,29 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.ahmadns7.mercureal.assistant.model.ModelCatalog
 import com.ahmadns7.mercureal.assistant.model.ModelRepository
+import com.ahmadns7.mercureal.assistant.model.ModelSettings
 import com.ahmadns7.mercureal.assistant.ui.AssistantState
 import com.ahmadns7.mercureal.assistant.ui.ModelsScreen
-import com.ahmadns7.mercureal.assistant.model.ModelCatalog
+import com.ahmadns7.mercureal.assistant.ui.NotesScreen
 import com.ahmadns7.mercureal.assistant.wake.AssistantRegistry
 import com.ahmadns7.mercureal.assistant.wake.WakeWordService
-import androidx.compose.runtime.collectAsState
-import androidx.compose.material3.Switch
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -78,6 +80,7 @@ class MainActivity : ComponentActivity() {
                             repo = repo,
                             onBack = { screen = Screen.Home },
                             onModels = { screen = Screen.Models },
+                            onNotes = { screen = Screen.Notes },
                             onWakeToggle = { on, micOk ->
                                 if (on && micOk) WakeWordService.start(applicationContext)
                                 else WakeWordService.stop(applicationContext)
@@ -85,6 +88,10 @@ class MainActivity : ComponentActivity() {
                             onRequestMic = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
                         )
                         Screen.Models -> ModelsScreen(
+                            repo = repo,
+                            onBack = { screen = Screen.Settings },
+                        )
+                        Screen.Notes -> NotesScreen(
                             repo = repo,
                             onBack = { screen = Screen.Settings },
                         )
@@ -99,7 +106,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private enum class Screen { Home, Settings, Models }
+    private enum class Screen { Home, Settings, Models, Notes }
 }
 
 @Composable
@@ -107,12 +114,15 @@ fun SettingsScreen(
     repo: ModelRepository,
     onBack: () -> Unit,
     onModels: () -> Unit,
+    onNotes: () -> Unit,
     onWakeToggle: (on: Boolean, micOk: Boolean) -> Unit,
     onRequestMic: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
     val scope = rememberCoroutineScope()
     val wakeOn by repo.settings.wakeOn.collectAsState(initial = false)
+    val conversationOn by repo.settings.conversationOn.collectAsState(initial = true)
+    val followUp by repo.settings.followUpSeconds.collectAsState(initial = 60)
     val installed by repo.installed.collectAsState()
     val kwsReady = ModelCatalog.KWS_ID in installed
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -143,8 +153,43 @@ fun SettingsScreen(
                 },
             )
         }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Conversation mode")
+                Text(
+                    "after a reply, keep listening for your next question without saying \"ahmad\" again. say \"stop listening\" or \"bye\" to end it.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Switch(
+                checked = conversationOn,
+                onCheckedChange = { on -> scope.launch { repo.settings.setConversationOn(on) } },
+            )
+        }
+        if (conversationOn) {
+            Text("Follow-up window: ends after ${followUp}s of silence", style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ModelSettings.FOLLOW_UP_OPTIONS.forEach { s ->
+                    OutlinedButton(onClick = { scope.launch { repo.settings.setFollowUpSeconds(s) } }) {
+                        Text(if (s == followUp) "${s}s *" else "${s}s")
+                    }
+                }
+            }
+        }
+        OutlinedButton(onClick = onNotes, modifier = Modifier.fillMaxWidth()) { Text("Notes") }
         OutlinedButton(onClick = onModels, modifier = Modifier.fillMaxWidth()) { Text("Models") }
     }
+}
+
+/** Human label for the controller state. */
+fun stateLabel(state: AssistantState): String = when {
+    state.session && state.label == "listening" -> "listening for your next question"
+    state.label == "listening" -> "listening"
+    state.label == "transcribing" -> "thinking (hearing you)"
+    state.label == "thinking" -> "thinking"
+    state.label == "speaking" -> "speaking"
+    state.label == "idle" && state.session -> "conversation open"
+    else -> state.label
 }
 
 @Composable
@@ -165,7 +210,7 @@ fun AssistantScreen(
             text = "offline. on-device. nothing leaves this phone.",
             style = MaterialTheme.typography.bodySmall,
         )
-        Text(text = "status: ${state.label}", modifier = Modifier.padding(top = 16.dp))
+        Text(text = "status: ${stateLabel(state)}", modifier = Modifier.padding(top = 16.dp))
         Text(text = "say \"ahmad\" when wake word is on in Settings", style = MaterialTheme.typography.bodySmall)
         if (state.transcript.isNotBlank()) {
             Text(text = "you: ${state.transcript}", modifier = Modifier.padding(top = 12.dp))

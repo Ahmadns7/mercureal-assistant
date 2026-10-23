@@ -25,6 +25,7 @@ class ModelRepository(context: Context) {
 
     val store = ModelStore(context)
     val settings = ModelSettings(context)
+    val notes = com.ahmadns7.mercureal.assistant.memory.NoteStore(context)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val jobs = HashMap<String, Job>()

@@ -2,9 +2,12 @@ package com.ahmadns7.mercureal.assistant
 
 import android.content.Context
 import com.ahmadns7.mercureal.assistant.audio.MicRecorder
+import com.ahmadns7.mercureal.assistant.audio.VoiceActivityCapture
 import com.ahmadns7.mercureal.assistant.engine.LlmEngine
 import com.ahmadns7.mercureal.assistant.engine.SttEngine
 import com.ahmadns7.mercureal.assistant.engine.Tts
+import com.ahmadns7.mercureal.assistant.memory.VoiceIntent
+import com.ahmadns7.mercureal.assistant.memory.VoiceIntents
 import com.ahmadns7.mercureal.assistant.model.ModelCatalog
 import com.ahmadns7.mercureal.assistant.model.ModelRepository
 import com.ahmadns7.mercureal.assistant.model.ModelSpec
@@ -14,77 +17,160 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
  * Orchestrates the fully on-device pipeline:
- * mic PCM -> whisper.cpp (STT) -> llama.cpp (LLM) -> sherpa-onnx (offline TTS).
- * The active STT/LLM are read from settings each turn, so a switch in
- * Settings > Models takes effect on the next utterance.
+ * mic PCM -> whisper.cpp (STT) -> [notes intents] -> llama.cpp (LLM) -> sherpa-onnx (offline TTS).
+ *
+ * Conversation mode: after a turn is spoken, the controller opens a follow-up window and listens
+ * with [VoiceActivityCapture] for the next utterance. The window closes after the configured
+ * silence (default 60 s), when the user says an end phrase, or when hold-to-talk takes over.
+ * The mic is not captured while the reply is being spoken, and wake-word hits are ignored during
+ * speech and for a short echo tail afterwards.
  */
 class AssistantController(context: Context, val repo: ModelRepository) {
 
     val state = AssistantState()
+    private val notes get() = repo.notes
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val recorder = MicRecorder()
+    private val vad = VoiceActivityCapture()
     private val stt = SttEngine()
     private val llm = LlmEngine()
     private val tts = Tts(context, repo.store)
 
-    private val turnActive = java.util.concurrent.atomic.AtomicBoolean(false)
+    /** Held for a whole turn or conversation session, so turns never overlap. */
+    private val turnLock = Mutex()
+    @Volatile private var sessionCancelled = false
+    @Volatile private var quietUntil = 0L
 
     private var loadedStt: String? = null
     private var loadedLlm: String? = null
     private var loadedTts: String? = null
 
+    /**
+     * True while the controller owns the microphone (a turn or a conversation session). The wake
+     * word service releases its own mic while this is set, so only one AudioRecord is open.
+     */
+    @Volatile var micInUse = false
+        private set
+
+    /** True while a reply is spoken or its echo tail is still playing. */
+    fun isSpeakingOrEcho(): Boolean = System.currentTimeMillis() < quietUntil
+
+    /** Ends an open follow-up window. */
+    fun endSession() {
+        sessionCancelled = true
+    }
+
     fun startListening() {
+        // Hold-to-talk interrupts any open follow-up window. Never open a second mic while one is in use.
+        sessionCancelled = true
+        if (micInUse || turnLock.isLocked) return
+        state.session = false
         state.label = "listening"
         state.reply = ""
         recorder.start()
     }
 
     /**
-     * Wake-word hand-off: runs the same whisper -> llama -> TTS path on an utterance captured after
-     * the keyword fired. Returns false (and drops the audio) if a turn is already running.
+     * Wake-word hand-off: runs the turn on an utterance captured after the keyword fired.
+     * Returns false (and drops the audio) if a turn or session is already running.
      */
     fun answerUtterance(pcm: FloatArray): Boolean {
-        if (turnActive.getAndSet(true)) return false
-        runTurn(pcm)
+        if (!turnLock.tryLock()) return false
+        scope.launch {
+            try {
+                runSession(pcm)
+            } finally {
+                turnLock.unlock()
+            }
+        }
         return true
     }
 
     fun stopListeningAndAnswer() {
         val pcm = recorder.stop()
-        if (turnActive.getAndSet(true)) return
-        runTurn(pcm)
+        scope.launch { turnLock.withLock { runSession(pcm) } }
     }
 
-    private fun runTurn(pcm: FloatArray) {
-        scope.launch {
-            try {
-                ensureModelsLoaded()
-                state.label = "transcribing"
-                val text = withContext(Dispatchers.Default) { stt.transcribe(pcm) }
-                state.transcript = text
-                if (text.isBlank()) {
-                    state.label = "didn't catch that"
-                    return@launch
+    private suspend fun runSession(firstPcm: FloatArray) {
+        sessionCancelled = false
+        micInUse = true
+        var pcm: FloatArray? = firstPcm
+        try {
+            while (pcm != null) {
+                val keepGoing = handleTurn(pcm, followUp = state.session)
+                if (!keepGoing || sessionCancelled) break
+                if (!repo.settings.conversationOn.first()) break
+
+                val windowMs = repo.settings.followUpSeconds.first() * 1000L
+                state.session = true
+                state.label = "listening"
+                // Let the room's echo of the reply die down before opening the mic.
+                delay(ECHO_TAIL_MS)
+                if (sessionCancelled) break
+                pcm = withContext(Dispatchers.IO) { vad.capture(windowMs) { sessionCancelled } }
+                if (pcm == null) {
+                    // Silence ran out the follow-up window, or the mic was unavailable.
+                    if (!sessionCancelled) state.label = "idle"
+                    break
                 }
+            }
+        } catch (e: Exception) {
+            state.label = "error: ${e.message}"
+        } finally {
+            micInUse = false
+            state.session = false
+            if (!state.label.startsWith("error")) state.label = "idle"
+        }
+    }
+
+    /** Returns false when the turn was an end phrase that closes the conversation. */
+    private suspend fun handleTurn(pcm: FloatArray, followUp: Boolean): Boolean {
+        ensureModelsLoaded()
+        state.label = "transcribing"
+        val text = withContext(Dispatchers.Default) { stt.transcribe(pcm) }
+        state.transcript = text
+        if (text.isBlank()) {
+            state.label = "didn't catch that"
+            return true
+        }
+        if (followUp && END_PHRASE.matches(text.trim())) {
+            state.reply = ""
+            return false
+        }
+
+        val reply = when (val intent = VoiceIntents.parse(text)) {
+            is VoiceIntent.Remember -> {
+                notes.add(intent.text)
+                "got it, saved."
+            }
+            is VoiceIntent.Recall -> {
                 state.label = "thinking"
-                val reply = withContext(Dispatchers.Default) { llm.respond(text) }
-                state.reply = reply
-                state.label = "speaking"
-                withContext(Dispatchers.IO) { tts.speak(reply) }
-                state.label = "idle"
-            } catch (e: Exception) {
-                state.label = "error: ${e.message}"
-            } finally {
-                turnActive.set(false)
+                val memory = VoiceIntents.memoryContext(notes.all(), intent.topic)
+                withContext(Dispatchers.Default) { llm.respond(text, memory) }
+            }
+            VoiceIntent.None -> {
+                state.label = "thinking"
+                withContext(Dispatchers.Default) { llm.respond(text) }
             }
         }
+        state.reply = reply
+        state.label = "speaking"
+        try {
+            withContext(Dispatchers.IO) { tts.speak(reply) }
+        } finally {
+            quietUntil = System.currentTimeMillis() + ECHO_TAIL_MS
+        }
+        return true
     }
 
     private suspend fun ensureModelsLoaded() {
@@ -122,5 +208,13 @@ class AssistantController(context: Context, val repo: ModelRepository) {
         tts.close()
         repo.release()
         scope.cancel()
+    }
+
+    private companion object {
+        const val ECHO_TAIL_MS = 800L
+        val END_PHRASE = Regex(
+            "^(stop listening|that's all|thats all|that is all|goodbye|bye|stop)[\\s.!?]*$",
+            RegexOption.IGNORE_CASE,
+        )
     }
 }
