@@ -1,0 +1,160 @@
+package com.ahmadns7.mercureal.assistant.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.ahmadns7.mercureal.assistant.model.DownloadState
+import com.ahmadns7.mercureal.assistant.model.ModelCatalog
+import com.ahmadns7.mercureal.assistant.model.ModelKind
+import com.ahmadns7.mercureal.assistant.model.ModelRepository
+import com.ahmadns7.mercureal.assistant.model.ModelSpec
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+/** Settings > Models: download, switch and delete the curated on-device models. */
+@Composable
+fun ModelsScreen(repo: ModelRepository, onBack: () -> Unit) {
+    BackHandler(onBack = onBack)
+
+    val downloads by repo.downloads.collectAsState()
+    val installed by repo.installed.collectAsState()
+    val activeStt by repo.settings.activeStt.collectAsState(initial = ModelCatalog.DEFAULT_STT)
+    val activeLlm by repo.settings.activeLlm.collectAsState(initial = ModelCatalog.DEFAULT_LLM)
+    val scope = rememberCoroutineScope()
+    val usedBytes = remember(installed) { repo.store.bytesUsed() }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item { TextButton(onClick = onBack) { Text("< back") } }
+        item { Text("Models", style = MaterialTheme.typography.headlineMedium) }
+        item {
+            Text(
+                "Downloads come from Hugging Face over HTTPS. Each file is checked against a pinned sha256 " +
+                    "before it is accepted and is stored only in this app's private storage. " +
+                    "Space used by downloaded models: ${formatBytes(usedBytes)}.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
+        item {
+            Text("Speech to text (whisper.cpp)", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+        }
+        items(ModelCatalog.ofKind(ModelKind.STT), key = { it.id }) { spec ->
+            ModelCard(
+                spec = spec,
+                isInstalled = spec.id in installed,
+                isActive = spec.id == activeStt,
+                download = downloads[spec.id],
+                onDownload = { repo.download(spec) },
+                onCancel = { repo.cancel(spec) },
+                onUse = { scope.launch { repo.settings.setActiveStt(spec.id) } },
+                onDelete = { scope.launch(Dispatchers.IO) { repo.delete(spec) } },
+            )
+        }
+
+        item {
+            Text("Language model (llama.cpp)", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+        }
+        items(ModelCatalog.ofKind(ModelKind.LLM), key = { it.id }) { spec ->
+            ModelCard(
+                spec = spec,
+                isInstalled = spec.id in installed,
+                isActive = spec.id == activeLlm,
+                download = downloads[spec.id],
+                onDownload = { repo.download(spec) },
+                onCancel = { repo.cancel(spec) },
+                onUse = { scope.launch { repo.settings.setActiveLlm(spec.id) } },
+                onDelete = { scope.launch(Dispatchers.IO) { repo.delete(spec) } },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModelCard(
+    spec: ModelSpec,
+    isInstalled: Boolean,
+    isActive: Boolean,
+    download: DownloadState?,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+    onUse: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(spec.displayName, style = MaterialTheme.typography.titleSmall)
+            Text(
+                "size ${formatBytes(spec.sizeBytes)} | license ${spec.license}",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text("source: ${spec.source}", style = MaterialTheme.typography.bodySmall)
+
+            when {
+                download is DownloadState.Running -> {
+                    LinearProgressIndicator(
+                        progress = download.progress,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    )
+                    Text("downloading ${(download.progress * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = onCancel, modifier = Modifier.padding(top = 4.dp)) { Text("cancel") }
+                }
+                download is DownloadState.Failed -> {
+                    Text(
+                        "download failed: ${download.message}. the partial file was removed.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Button(onClick = onDownload, modifier = Modifier.padding(top = 4.dp)) { Text("retry download") }
+                }
+                isInstalled -> {
+                    Text(
+                        if (isActive) "downloaded, active" else "downloaded",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    Row(modifier = Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (!isActive) Button(onClick = onUse) { Text("use") }
+                        OutlinedButton(onClick = onDelete, enabled = !isActive) { Text("delete") }
+                    }
+                    if (isActive) {
+                        Text(
+                            "switch to another model before deleting this one.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+                else -> {
+                    Button(onClick = onDownload, modifier = Modifier.padding(top = 4.dp)) { Text("download") }
+                }
+            }
+        }
+    }
+}
+
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1_000_000_000L -> "%.1f GB".format(bytes / 1e9)
+    bytes >= 1_000_000L -> "%.0f MB".format(bytes / 1e6)
+    else -> "$bytes B"
+}

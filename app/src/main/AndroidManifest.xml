@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Microphone only. No INTERNET permission: the app cannot make network calls. -->
+    <!-- Microphone: hold-to-talk speech input. Audio never leaves the device. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!--
+        INTERNET is for model downloads ONLY (Settings > Models, model/ModelDownloader.kt),
+        fetching curated model files from Hugging Face. Nothing else in this app gets network
+        access: no speech, no prompts, no transcripts, no analytics, no crash reporting.
+        Do not use this permission for anything else.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="false"

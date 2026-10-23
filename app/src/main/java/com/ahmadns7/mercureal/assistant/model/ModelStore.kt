@@ -4,21 +4,30 @@ import android.content.Context
 import java.io.File
 
 /**
- * Models are sideloaded, never downloaded. Put them in the app's external files dir:
- *   adb push ggml-tiny.en.bin /sdcard/Android/data/com.ahmadns7.mercureal.assistant/files/
- *   adb push qwen2.5-0.5b-instruct-q4_k_m.gguf /sdcard/Android/data/com.ahmadns7.mercureal.assistant/files/
- * See scripts/fetch_models.sh for the exact files.
+ * Model files live in the app's PRIVATE internal storage (filesDir/models).
+ * Never external storage: other apps and shared storage cannot read them.
  */
-class ModelStore(private val context: Context) {
+class ModelStore(context: Context) {
 
-    private val dir: File
-        get() = context.getExternalFilesDir(null) ?: context.filesDir
+    private val dir = File(context.filesDir, "models").apply { mkdirs() }
 
-    fun whisperModelFile(): File = File(dir, WHISPER_MODEL)
-    fun llmModelFile(): File = File(dir, LLM_MODEL)
+    fun fileFor(spec: ModelSpec): File = File(dir, spec.fileName)
 
-    companion object {
-        const val WHISPER_MODEL = "ggml-tiny.en.bin"
-        const val LLM_MODEL = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+    fun partFileFor(spec: ModelSpec): File = File(dir, spec.fileName + ".part")
+
+    /**
+     * Installed means the final file exists at the exact pinned size. The sha256 was checked
+     * before the file was moved into place (see ModelDownloader), so only verified files get this name.
+     */
+    fun isInstalled(spec: ModelSpec): Boolean {
+        val f = fileFor(spec)
+        return f.isFile && f.length() == spec.sizeBytes
     }
+
+    fun delete(spec: ModelSpec) {
+        fileFor(spec).delete()
+        partFileFor(spec).delete()
+    }
+
+    fun bytesUsed(): Long = dir.listFiles()?.sumOf { it.length() } ?: 0L
 }
