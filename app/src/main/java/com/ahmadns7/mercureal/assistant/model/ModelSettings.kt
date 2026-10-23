@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import com.ahmadns7.mercureal.assistant.translate.Languages
 
 private val Context.modelSettingsStore by preferencesDataStore(name = "model_settings")
 
@@ -20,6 +21,36 @@ class ModelSettings(private val context: Context) {
     private val wakeKey = booleanPreferencesKey("wake_word_on")
     private val conversationKey = booleanPreferencesKey("conversation_on")
     private val followUpKey = intPreferencesKey("follow_up_seconds")
+    private val sttLangKey = stringPreferencesKey("stt_language")
+    private val translationKey = booleanPreferencesKey("translation_on")
+    private val targetKey = stringPreferencesKey("translation_target")
+
+    /** Speech language for multilingual whisper models: "auto" (detect) or a language code. Default auto. */
+    val sttLanguage: Flow<String> = context.modelSettingsStore.data.map {
+        (it[sttLangKey] ?: "auto").takeIf { c -> c in Languages.sttCodes } ?: "auto"
+    }
+
+    suspend fun setSttLanguage(code: String) {
+        require(code in Languages.sttCodes)
+        context.modelSettingsStore.edit { it[sttLangKey] = code }
+    }
+
+    /** "say X in <language>" and "translate X" intents. Off by default. */
+    val translationOn: Flow<Boolean> = context.modelSettingsStore.data.map { it[translationKey] ?: false }
+
+    suspend fun setTranslationOn(on: Boolean) {
+        context.modelSettingsStore.edit { it[translationKey] = on }
+    }
+
+    /** Default translation target when the request names none. */
+    val translationTarget: Flow<String> = context.modelSettingsStore.data.map {
+        (it[targetKey] ?: Languages.DEFAULT_TARGET).takeIf { c -> Languages.byCode(c) != null } ?: Languages.DEFAULT_TARGET
+    }
+
+    suspend fun setTranslationTarget(code: String) {
+        require(Languages.byCode(code) != null)
+        context.modelSettingsStore.edit { it[targetKey] = code }
+    }
 
     /** Whether the always-on wake word service should run. Off by default. */
     val wakeOn: Flow<Boolean> = context.modelSettingsStore.data.map { it[wakeKey] ?: false }

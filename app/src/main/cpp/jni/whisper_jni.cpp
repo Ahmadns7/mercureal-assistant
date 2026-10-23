@@ -20,14 +20,21 @@ Java_com_ahmadns7_mercureal_assistant_engine_SttEngine_nativeInit(
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_ahmadns7_mercureal_assistant_engine_SttEngine_nativeTranscribe(
-        JNIEnv *env, jobject, jlong jctx, jfloatArray jpcm) {
+        JNIEnv *env, jobject, jlong jctx, jfloatArray jpcm, jstring jlang) {
     auto *ctx = reinterpret_cast<whisper_context *>(jctx);
     jsize n = env->GetArrayLength(jpcm);
     std::vector<float> pcm(n);
     env->GetFloatArrayRegion(jpcm, 0, n, pcm.data());
 
+    const char *lang_c = env->GetStringUTFChars(jlang, nullptr);
+    std::string lang(lang_c);
+    env->ReleaseStringUTFChars(jlang, lang_c);
+    // "auto" asks whisper to detect the spoken language (multilingual models only).
+    const bool detect = lang == "auto";
+
     whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
-    params.language = "en";
+    params.language = detect ? "auto" : lang.c_str();
+    params.detect_language = false;
     params.translate = false;
     params.no_context = true;
     params.print_progress = false;

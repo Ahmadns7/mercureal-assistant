@@ -63,3 +63,9 @@ Sister project: [mercureal-voice](https://github.com/Ahmadns7/mercureal-voice) (
 
 ## License
 MIT. See LICENSE.
+
+## Multilingual speech and translation
+
+- Speech: `whisper-tiny` and `whisper-small` (ggml, multilingual) are in Models. In Settings, pick a speech language or leave it on auto (detection). English-only `.en` models always listen as English.
+- Translation: turn on Translation in Settings, then say "say <text> in french" or "translate <text> to spanish". The on-device Qwen LLM does the translation, so no extra model or permission is needed. Quality for small languages (yoruba, hausa, swahili) depends on the 0.5B model and is not verified.
+- Speech output: the bundled voice (vits-ljs) is English-only. Non-English translations are shown on screen and the app says so aloud.

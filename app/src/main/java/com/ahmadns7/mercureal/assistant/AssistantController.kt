@@ -12,6 +12,8 @@ import com.ahmadns7.mercureal.assistant.model.ModelCatalog
 import com.ahmadns7.mercureal.assistant.model.ModelRepository
 import com.ahmadns7.mercureal.assistant.model.ModelSpec
 import com.ahmadns7.mercureal.assistant.model.PromptFormat
+import com.ahmadns7.mercureal.assistant.translate.Languages
+import com.ahmadns7.mercureal.assistant.translate.Translation
 import com.ahmadns7.mercureal.assistant.ui.AssistantState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -137,7 +139,7 @@ class AssistantController(context: Context, val repo: ModelRepository) {
     private suspend fun handleTurn(pcm: FloatArray, followUp: Boolean): Boolean {
         ensureModelsLoaded()
         state.label = "transcribing"
-        val text = withContext(Dispatchers.Default) { stt.transcribe(pcm) }
+        val text = withContext(Dispatchers.Default) { stt.transcribe(pcm, sttLanguage()) }
         state.transcript = text
         if (text.isBlank()) {
             state.label = "didn't catch that"
@@ -146,6 +148,28 @@ class AssistantController(context: Context, val repo: ModelRepository) {
         if (followUp && END_PHRASE.matches(text.trim())) {
             state.reply = ""
             return false
+        }
+
+        val translation = if (repo.settings.translationOn.first()) Translation.parse(text) else null
+        if (translation != null) {
+            val target = translation.target
+                ?: Languages.byCode(repo.settings.translationTarget.first())
+                ?: Languages.byCode(Languages.DEFAULT_TARGET)!!
+            state.label = "translating"
+            val translated = withContext(Dispatchers.Default) { llm.translate(translation.text, target.name) }
+            state.reply = translated
+            state.label = "speaking"
+            // The bundled voice is English-only: only speak English output, otherwise show it.
+            if (Languages.voiceCanSpeak(target)) {
+                try {
+                    withContext(Dispatchers.IO) { tts.speak(translated) }
+                } finally {
+                    quietUntil = System.currentTimeMillis() + ECHO_TAIL_MS
+                }
+            } else {
+                state.reply = "$translated\n(${target.name}: shown on screen only, the voice is English-only)"
+            }
+            return true
         }
 
         val reply = when (val intent = VoiceIntents.parse(text)) {
@@ -171,6 +195,16 @@ class AssistantController(context: Context, val repo: ModelRepository) {
             quietUntil = System.currentTimeMillis() + ECHO_TAIL_MS
         }
         return true
+    }
+
+    /**
+     * Language for whisper: the Settings choice only applies to multilingual models.
+     * English-only (.en) models always get "en", since whisper cannot detect language on them.
+     */
+    private suspend fun sttLanguage(): String {
+        val sttId = repo.settings.activeStt.first()
+        val multilingual = ModelCatalog.byId(sttId)?.multilingual == true
+        return if (multilingual) repo.settings.sttLanguage.first() else "en"
     }
 
     private suspend fun ensureModelsLoaded() {

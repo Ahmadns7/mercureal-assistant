@@ -35,6 +35,8 @@ data class ModelSpec(
     /** When set, [url] is an archive: it is verified, stream-extracted into [members], then deleted. */
     val archive: ArchiveFormat? = null,
     val members: List<ArchiveMember> = emptyList(),
+    /** True for whisper models trained on many languages. The .en models only hear English. */
+    val multilingual: Boolean = false,
 )
 
 object ModelCatalog {
@@ -62,6 +64,32 @@ object ModelCatalog {
     private const val VITS_LJS_REPO = "https://huggingface.co/csukuangfj/vits-ljs"
 
     val all: List<ModelSpec> = listOf(
+        ModelSpec(
+            id = "whisper-tiny",
+            kind = ModelKind.STT,
+            displayName = "Whisper tiny (multilingual, ggml)",
+            fileName = "ggml-tiny.bin",
+            url = WHISPER_REPO + "/resolve/" + WHISPER_REV + "/ggml-tiny.bin",
+            sizeBytes = 77_691_713L,
+            sha256 = "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+            license = "MIT",
+            licenseUrl = WHISPER_REPO,
+            source = WHISPER_SOURCE,
+            multilingual = true,
+        ),
+        ModelSpec(
+            id = "whisper-small",
+            kind = ModelKind.STT,
+            displayName = "Whisper small (multilingual, ggml)",
+            fileName = "ggml-small.bin",
+            url = WHISPER_REPO + "/resolve/" + WHISPER_REV + "/ggml-small.bin",
+            sizeBytes = 487_601_967L,
+            sha256 = "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+            license = "MIT",
+            licenseUrl = WHISPER_REPO,
+            source = WHISPER_SOURCE,
+            multilingual = true,
+        ),
         ModelSpec(
             id = KWS_ID,
             kind = ModelKind.KWS,

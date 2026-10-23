@@ -23,6 +23,17 @@ class LlmEngine {
         return nativeGenerate(ctx, buildPrompt(userText, memory), MAX_REPLY_TOKENS).trim()
     }
 
+    /**
+     * Translates [text] into [targetName] (e.g. "French") with the active instruct model.
+     * The model is a small LLM, so quality is limited; output is one plain line.
+     */
+    fun translate(text: String, targetName: String): String {
+        check(ctx != 0L) { "llm not loaded" }
+        val system = "You are a translator. Translate the user's text into $targetName. " +
+            "Output only the translation, with no quotes, notes or explanation."
+        return nativeGenerate(ctx, buildPromptFor(system, text), MAX_TRANSLATION_TOKENS).trim()
+    }
+
     fun close() {
         if (ctx != 0L) {
             nativeFree(ctx)
@@ -60,6 +71,8 @@ class LlmEngine {
         const val CONTEXT_TOKENS = 2048
         /** Upper bound on generated tokens per reply (replies are one or two sentences). */
         const val MAX_REPLY_TOKENS = 160
+        /** Translations of one utterance are short; cap generation so a small model cannot ramble. */
+        const val MAX_TRANSLATION_TOKENS = 128
         private const val SYSTEM = "You are a concise, private voice assistant. Answer in one or two short sentences."
     }
 }

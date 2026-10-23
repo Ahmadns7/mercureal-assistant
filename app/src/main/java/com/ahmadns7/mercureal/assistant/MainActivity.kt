@@ -36,6 +36,7 @@ import androidx.core.content.ContextCompat
 import com.ahmadns7.mercureal.assistant.model.ModelCatalog
 import com.ahmadns7.mercureal.assistant.model.ModelRepository
 import com.ahmadns7.mercureal.assistant.model.ModelSettings
+import com.ahmadns7.mercureal.assistant.translate.Languages
 import com.ahmadns7.mercureal.assistant.ui.AssistantState
 import com.ahmadns7.mercureal.assistant.ui.ModelsScreen
 import com.ahmadns7.mercureal.assistant.ui.NotesScreen
@@ -175,6 +176,46 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+        val sttLang by repo.settings.sttLanguage.collectAsState(initial = "auto")
+        val translationOn by repo.settings.translationOn.collectAsState(initial = false)
+        val targetCode by repo.settings.translationTarget.collectAsState(initial = Languages.DEFAULT_TARGET)
+        val activeStt = repo.settings.activeStt.collectAsState(initial = ModelCatalog.DEFAULT_STT).value
+        val sttMultilingual = ModelCatalog.byId(activeStt)?.multilingual == true
+        Text("Speech language", style = MaterialTheme.typography.titleSmall)
+        Text(
+            if (sttMultilingual) "auto detects what you speak. pick one to lock it."
+            else "the active speech model is English-only (.en). switch to a multilingual model in Models to use this.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (sttMultilingual) {
+            OutlinedButton(onClick = {
+                val codes = Languages.sttCodes
+                val next = codes[(codes.indexOf(sttLang).coerceAtLeast(0) + 1) % codes.size]
+                scope.launch { repo.settings.setSttLanguage(next) }
+            }) { Text("language: $sttLang (tap to change)") }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Translation")
+                Text(
+                    "say \"say X in french\" or \"translate X to spanish\". the reply is translated on this phone. the voice only speaks English, so other languages show on screen.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Switch(
+                checked = translationOn,
+                onCheckedChange = { on -> scope.launch { repo.settings.setTranslationOn(on) } },
+            )
+        }
+        if (translationOn) {
+            Text("Default target language", style = MaterialTheme.typography.bodySmall)
+            val targets = Languages.targets
+            val current = targets.firstOrNull { it.code == targetCode } ?: targets.first()
+            OutlinedButton(onClick = {
+                val next = targets[(targets.indexOf(current) + 1) % targets.size]
+                scope.launch { repo.settings.setTranslationTarget(next.code) }
+            }) { Text("target: ${current.name} (tap to change)") }
         }
         OutlinedButton(onClick = onNotes, modifier = Modifier.fillMaxWidth()) { Text("Notes") }
         OutlinedButton(onClick = onModels, modifier = Modifier.fillMaxWidth()) { Text("Models") }

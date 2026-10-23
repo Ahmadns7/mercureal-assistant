@@ -14,9 +14,13 @@ class SttEngine {
         check(ctx != 0L) { "whisper failed to load ${modelFile.name}" }
     }
 
-    fun transcribe(pcm: FloatArray): String {
+    /**
+     * [language] is a whisper code ("en", "fr", ...) or "auto" for detection. English-only models
+     * (tiny.en, base.en, small.en) must be given "en": whisper cannot detect language on them.
+     */
+    fun transcribe(pcm: FloatArray, language: String = "en"): String {
         if (ctx == 0L || pcm.isEmpty()) return ""
-        return nativeTranscribe(ctx, pcm).trim()
+        return nativeTranscribe(ctx, pcm, language).trim()
     }
 
     fun close() {
@@ -27,7 +31,7 @@ class SttEngine {
     }
 
     private external fun nativeInit(modelPath: String): Long
-    private external fun nativeTranscribe(ctx: Long, pcm: FloatArray): String
+    private external fun nativeTranscribe(ctx: Long, pcm: FloatArray, language: String): String
     private external fun nativeFree(ctx: Long)
 
     companion object {
