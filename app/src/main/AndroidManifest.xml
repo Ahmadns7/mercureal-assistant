@@ -81,6 +81,17 @@
                 android:resource="@xml/listen_widget_info" />
         </receiver>
 
+        <!-- Offline dictation: record, transcribe on this phone, copy or share the text. No network. -->
+        <activity
+            android:name=".dictate.DictateActivity"
+            android:exported="true"
+            android:label="Dictate">
+            <intent-filter>
+                <action android:name="com.ahmadns7.mercureal.assistant.action.DICTATE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <!-- Quick settings tile: "Mercureal listen". Only the system can bind it. -->
         <service
             android:name=".tile.ListenTileService"

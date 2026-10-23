@@ -44,6 +44,10 @@ import com.ahmadns7.mercureal.assistant.ui.HistoryScreen
 import com.ahmadns7.mercureal.assistant.ui.WakePhraseEditor
 import com.ahmadns7.mercureal.assistant.ui.ModelsScreen
 import com.ahmadns7.mercureal.assistant.ui.NotesScreen
+import com.ahmadns7.mercureal.assistant.ui.PlanBadge
+import com.ahmadns7.mercureal.assistant.ui.ProScreen
+import com.ahmadns7.mercureal.assistant.billing.BillingManager
+import com.ahmadns7.mercureal.assistant.dictate.DictateActivity
 import com.ahmadns7.mercureal.assistant.wake.AssistantRegistry
 import com.ahmadns7.mercureal.assistant.wake.WakeWordService
 import kotlinx.coroutines.launch
@@ -52,6 +56,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var assistant: AssistantController
     private lateinit var repo: ModelRepository
+    private lateinit var billing: BillingManager
 
     private val micPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -78,6 +83,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         repo = ModelRepository(applicationContext)
         assistant = AssistantController(applicationContext, repo)
+        billing = BillingManager(applicationContext, repo.entitlements)
+        billing.connect()
         AssistantRegistry.controller = assistant
         assistant.permissionRequester = { perm -> extraPermission.launch(perm) }
         handleListenIntent(intent)
@@ -93,6 +100,9 @@ class MainActivity : ComponentActivity() {
                             wakePhrase = wakePhrase,
                             onOpenSettings = { screen = Screen.Settings },
                             onOpenWake = { screen = Screen.Settings },
+                            onDictate = { startActivity(Intent(this, DictateActivity::class.java)) },
+                            onPro = { screen = Screen.Pro },
+                            repo = repo,
                             onPress = {
                                 val hasMic = ContextCompat.checkSelfPermission(
                                     this, Manifest.permission.RECORD_AUDIO
@@ -113,6 +123,7 @@ class MainActivity : ComponentActivity() {
                                 else WakeWordService.stop(applicationContext)
                             },
                             onRequestMic = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
+                            onPro = { screen = Screen.Pro },
                         )
                         Screen.History -> HistoryScreen(
                             repo = repo,
@@ -120,6 +131,11 @@ class MainActivity : ComponentActivity() {
                         )
                         Screen.Models -> ModelsScreen(
                             repo = repo,
+                            onBack = { screen = Screen.Settings },
+                        )
+                        Screen.Pro -> ProScreen(
+                            repo = repo,
+                            billing = billing,
                             onBack = { screen = Screen.Settings },
                         )
                         Screen.Notes -> NotesScreen(
@@ -134,10 +150,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         assistant.release()
+        billing.release()
         super.onDestroy()
     }
 
-    private enum class Screen { Home, Settings, Models, Notes, History }
+    private enum class Screen { Home, Settings, Models, Notes, History, Pro }
 }
 
 @Composable
@@ -149,6 +166,7 @@ fun SettingsScreen(
     onHistory: () -> Unit,
     onWakeToggle: (on: Boolean, micOk: Boolean) -> Unit,
     onRequestMic: () -> Unit,
+    onPro: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
     val scope = rememberCoroutineScope()
@@ -271,6 +289,7 @@ fun SettingsScreen(
                 scope.launch { repo.settings.setTranslationTarget(next.code) }
             }) { Text("target: ${current.name} (tap to change)") }
         }
+        OutlinedButton(onClick = onPro, modifier = Modifier.fillMaxWidth()) { Text("MercuReal Pro") }
         OutlinedButton(onClick = onNotes, modifier = Modifier.fillMaxWidth()) { Text("Notes") }
         OutlinedButton(onClick = onHistory, modifier = Modifier.fillMaxWidth()) { Text("History") }
         OutlinedButton(onClick = onModels, modifier = Modifier.fillMaxWidth()) { Text("Models") }
@@ -294,6 +313,9 @@ fun AssistantScreen(
     wakePhrase: String,
     onOpenSettings: () -> Unit,
     onOpenWake: () -> Unit,
+    onDictate: () -> Unit,
+    onPro: () -> Unit,
+    repo: ModelRepository,
     onPress: () -> Unit,
     onRelease: () -> Unit,
 ) {
@@ -331,7 +353,12 @@ fun AssistantScreen(
         ) {
             Text("hold to talk")
         }
-        TextButton(onClick = onOpenSettings, modifier = Modifier.padding(top = 16.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 16.dp)) {
+            OutlinedButton(onClick = onDictate) { Text("dictate") }
+            OutlinedButton(onClick = onPro) { Text("pro") }
+        }
+        PlanBadge(repo)
+        TextButton(onClick = onOpenSettings, modifier = Modifier.padding(top = 8.dp)) {
             Text("Settings")
         }
     }

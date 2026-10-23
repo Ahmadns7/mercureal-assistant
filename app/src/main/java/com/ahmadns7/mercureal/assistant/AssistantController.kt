@@ -122,6 +122,13 @@ class AssistantController(context: Context, val repo: ModelRepository) {
         micInUse = true
         var pcm: FloatArray? = firstPcm
         try {
+            // Free tier: each new conversation counts once against the daily cap. Pro is never limited.
+            if (!repo.entitlements.startConversation()) {
+                state.label = "free limit reached"
+                state.reply = LIMIT_MESSAGE
+                state.session = false
+                return
+            }
             while (pcm != null) {
                 val keepGoing = handleTurn(pcm, followUp = state.session)
                 if (!keepGoing || sessionCancelled) break
@@ -284,6 +291,8 @@ class AssistantController(context: Context, val repo: ModelRepository) {
     }
 
     private companion object {
+        const val LIMIT_MESSAGE =
+            "you've used today's free conversations. upgrade to MercuReal Pro in Settings for unlimited use. the limit resets at midnight."
         const val ECHO_TAIL_MS = 800L
         val END_PHRASE = Regex(
             "^(stop listening|that's all|thats all|that is all|goodbye|bye|stop)[\\s.!?]*$",

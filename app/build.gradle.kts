@@ -1,3 +1,11 @@
+import java.util.Properties
+
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun signingValue(envKey: String, propKey: String): String? =
+    System.getenv(envKey) ?: keystoreProps.getProperty(propKey)
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -14,8 +22,8 @@ android {
         applicationId = "com.ahmadns7.mercureal.assistant"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -39,9 +47,28 @@ android {
         compose = true
     }
 
+    signingConfigs {
+        create("release") {
+            // Set via env (MERCUREAL_KEYSTORE_PATH, ..._PASSWORD, ..._KEY_ALIAS, ..._KEY_PASSWORD)
+            // or keystore.properties at the repo root (see RELEASE.md). Never commit either.
+            val path = signingValue("MERCUREAL_KEYSTORE_PATH", "storeFile")
+            if (path != null) {
+                storeFile = file(path)
+                storePassword = signingValue("MERCUREAL_KEYSTORE_PASSWORD", "storePassword")
+                keyAlias = signingValue("MERCUREAL_KEY_ALIAS", "keyAlias")
+                keyPassword = signingValue("MERCUREAL_KEY_PASSWORD", "keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Falls back to debug signing when no release keystore is configured, so CI still builds.
+            signingConfig = if (signingConfigs.getByName("release").storeFile != null)
+                signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
 
@@ -68,6 +95,9 @@ dependencies {
     ksp("androidx.room:room-compiler:2.7.1")
     // Offline TTS (sherpa-onnx 2.0.0, prebuilt arm64 AAR; see scripts/setup_native.sh for the pin)
     implementation(files("libs/sherpa-onnx-2.0.0.aar"))
+
+    // Google Play Billing: one-time "mercureal_pro" purchase (see billing/BillingConfig.kt)
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
     // Archive extraction for model downloads (tar.bz2, zip). Verified per member by sha256.
     implementation("org.apache.commons:commons-compress:1.27.1")
 }
