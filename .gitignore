@@ -1,0 +1,15 @@
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+# model files are large and sideloaded, never commit them
+models/*.bin
+models/*.gguf
+app/src/main/assets/models/
