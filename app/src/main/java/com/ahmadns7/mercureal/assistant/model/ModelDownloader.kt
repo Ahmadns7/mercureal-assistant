@@ -1,6 +1,7 @@
 package com.ahmadns7.mercureal.assistant.model
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -105,7 +106,7 @@ object ModelDownloader {
                 FileOutputStream(part, from > 0).use { out ->
                     val buf = ByteArray(BUF_SIZE)
                     while (true) {
-                        ensureActive()
+                        currentCoroutineContext().ensureActive()
                         val n = input.read(buf)
                         if (n < 0) break
                         out.write(buf, 0, n)
