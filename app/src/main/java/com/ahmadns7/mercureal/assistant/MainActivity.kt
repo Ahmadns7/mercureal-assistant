@@ -40,6 +40,8 @@ import com.ahmadns7.mercureal.assistant.model.ModelRepository
 import com.ahmadns7.mercureal.assistant.model.ModelSettings
 import com.ahmadns7.mercureal.assistant.translate.Languages
 import com.ahmadns7.mercureal.assistant.ui.AssistantState
+import com.ahmadns7.mercureal.assistant.ui.HistoryScreen
+import com.ahmadns7.mercureal.assistant.ui.WakePhraseEditor
 import com.ahmadns7.mercureal.assistant.ui.ModelsScreen
 import com.ahmadns7.mercureal.assistant.ui.NotesScreen
 import com.ahmadns7.mercureal.assistant.wake.AssistantRegistry
@@ -84,9 +86,11 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     var screen by remember { mutableStateOf(Screen.Home) }
+                    val wakePhrase by repo.settings.wakePhrase.collectAsState(initial = "ahmad")
                     when (screen) {
                         Screen.Home -> AssistantScreen(
                             state = assistant.state,
+                            wakePhrase = wakePhrase,
                             onOpenSettings = { screen = Screen.Settings },
                             onOpenWake = { screen = Screen.Settings },
                             onPress = {
@@ -103,11 +107,16 @@ class MainActivity : ComponentActivity() {
                             onBack = { screen = Screen.Home },
                             onModels = { screen = Screen.Models },
                             onNotes = { screen = Screen.Notes },
+                            onHistory = { screen = Screen.History },
                             onWakeToggle = { on, micOk ->
                                 if (on && micOk) WakeWordService.start(applicationContext)
                                 else WakeWordService.stop(applicationContext)
                             },
                             onRequestMic = { micPermission.launch(Manifest.permission.RECORD_AUDIO) },
+                        )
+                        Screen.History -> HistoryScreen(
+                            repo = repo,
+                            onBack = { screen = Screen.Settings },
                         )
                         Screen.Models -> ModelsScreen(
                             repo = repo,
@@ -128,7 +137,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private enum class Screen { Home, Settings, Models, Notes }
+    private enum class Screen { Home, Settings, Models, Notes, History }
 }
 
 @Composable
@@ -137,6 +146,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onModels: () -> Unit,
     onNotes: () -> Unit,
+    onHistory: () -> Unit,
     onWakeToggle: (on: Boolean, micOk: Boolean) -> Unit,
     onRequestMic: () -> Unit,
 ) {
@@ -144,6 +154,9 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val wakeOn by repo.settings.wakeOn.collectAsState(initial = false)
     val conversationOn by repo.settings.conversationOn.collectAsState(initial = true)
+    val retentionDays by repo.settings.retentionDays.collectAsState(initial = 30)
+    val retentionTurns by repo.settings.retentionTurns.collectAsState(initial = 500)
+    val wakePhrase by repo.settings.wakePhrase.collectAsState(initial = "ahmad")
     val followUp by repo.settings.followUpSeconds.collectAsState(initial = 60)
     val installed by repo.installed.collectAsState()
     val kwsReady = ModelCatalog.KWS_ID in installed
@@ -156,7 +169,7 @@ fun SettingsScreen(
         Text("Settings", style = MaterialTheme.typography.headlineMedium)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Wake word \"ahmad\"")
+                Text("Wake word \"$wakePhrase\"")
                 Text(
                     when {
                         !kwsReady -> "needs the wake word model: download it in Models."
@@ -187,6 +200,26 @@ fun SettingsScreen(
                 checked = conversationOn,
                 onCheckedChange = { on -> scope.launch { repo.settings.setConversationOn(on) } },
             )
+        }
+        WakePhraseEditor(
+            repo = repo,
+            wakeOn = wakeOn,
+            onRestart = { onWakeToggle(true, micOk) },
+        )
+        Text("History keeps", style = MaterialTheme.typography.titleSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ModelSettings.RETENTION_DAYS.forEach { d ->
+                OutlinedButton(onClick = { scope.launch { repo.settings.setRetentionDays(d) } }) {
+                    Text(if (d == retentionDays) "${d}d *" else "${d}d")
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ModelSettings.RETENTION_TURNS.forEach { t ->
+                OutlinedButton(onClick = { scope.launch { repo.settings.setRetentionTurns(t) } }) {
+                    Text(if (t == retentionTurns) "$t turns *" else "$t turns")
+                }
+            }
         }
         if (conversationOn) {
             Text("Follow-up window: ends after ${followUp}s of silence", style = MaterialTheme.typography.bodySmall)
@@ -239,6 +272,7 @@ fun SettingsScreen(
             }) { Text("target: ${current.name} (tap to change)") }
         }
         OutlinedButton(onClick = onNotes, modifier = Modifier.fillMaxWidth()) { Text("Notes") }
+        OutlinedButton(onClick = onHistory, modifier = Modifier.fillMaxWidth()) { Text("History") }
         OutlinedButton(onClick = onModels, modifier = Modifier.fillMaxWidth()) { Text("Models") }
     }
 }
@@ -257,6 +291,7 @@ fun stateLabel(state: AssistantState): String = when {
 @Composable
 fun AssistantScreen(
     state: AssistantState,
+    wakePhrase: String,
     onOpenSettings: () -> Unit,
     onOpenWake: () -> Unit,
     onPress: () -> Unit,
@@ -273,7 +308,7 @@ fun AssistantScreen(
             style = MaterialTheme.typography.bodySmall,
         )
         Text(text = "status: ${stateLabel(state)}", modifier = Modifier.padding(top = 16.dp))
-        Text(text = "say \"ahmad\" when wake word is on in Settings", style = MaterialTheme.typography.bodySmall)
+        Text(text = "say \"$wakePhrase\" when wake word is on in Settings", style = MaterialTheme.typography.bodySmall)
         if (state.transcript.isNotBlank()) {
             Text(text = "you: ${state.transcript}", modifier = Modifier.padding(top = 12.dp))
         }

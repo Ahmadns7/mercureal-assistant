@@ -22,6 +22,7 @@ import com.ahmadns7.mercureal.assistant.AssistantController
 import com.ahmadns7.mercureal.assistant.MainActivity
 import com.ahmadns7.mercureal.assistant.model.ModelCatalog
 import com.ahmadns7.mercureal.assistant.model.ModelRepository
+import kotlinx.coroutines.flow.first
 import java.io.ByteArrayOutputStream
 import kotlin.concurrent.thread
 
@@ -39,6 +40,8 @@ import kotlin.concurrent.thread
 class WakeWordService : Service() {
 
     @Volatile private var running = false
+    /** The phrase shown in the notification. Set from DataStore on start. */
+    @Volatile private var currentPhrase: String = WakePhrase.DEFAULT_PHRASE
     private var worker: Thread? = null
     private var detector: WakeWordDetector? = null
 
@@ -50,7 +53,8 @@ class WakeWordService : Service() {
             return START_NOT_STICKY
         }
         createChannel()
-        val notification = buildNotification("listening for \"ahmad\"")
+        val phrase = currentPhrase
+        val notification = buildNotification("listening for \"$phrase\"")
         if (Build.VERSION.SDK_INT >= 29) {
             startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         } else {
@@ -60,13 +64,15 @@ class WakeWordService : Service() {
         if (!running) {
             val repo = ModelRepository(applicationContext)
             val det = try {
-                WakeWordDetector.create(applicationContext, repo.store)
+                val keywords = kotlinx.coroutines.runBlocking { repo.settings.wakeKeywords.first() }
+                WakeWordDetector.create(repo.store, keywords)
             } catch (e: Exception) {
                 Log.w(TAG, "wake word unavailable: ${e.message}")
                 failClosed(repo, "wake word unavailable: ${e.message}")
                 return START_NOT_STICKY
             }
             detector = det
+            currentPhrase = kotlinx.coroutines.runBlocking { repo.settings.wakePhrase.first() }
             running = true
             worker = thread(name = "wake-kws") { listen(det, repo) }
         }
@@ -124,7 +130,7 @@ class WakeWordService : Service() {
      * for longer than the capture window.
      */
     private fun onKeyword(rec: AudioRecord) {
-        updateNotification("heard \"ahmad\", listening")
+        updateNotification("heard \"$currentPhrase\", listening")
         val buf = ByteArrayOutputStream()
         val minBuf = AudioRecord.getMinBufferSize(WakeWordDetector.SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val chunk = ByteArray(minBuf)
@@ -145,7 +151,7 @@ class WakeWordService : Service() {
             val hi = bytes[2 * i + 1].toInt()
             pcm[i] = ((hi shl 8) or lo) / 32768f
         }
-        updateNotification("listening for \"ahmad\"")
+        updateNotification("listening for \"$currentPhrase\"")
         AssistantRegistry.controller?.answerUtterance(pcm)
     }
 
@@ -218,6 +224,12 @@ class WakeWordService : Service() {
         private const val MAX_UTTERANCE_SECONDS = 6
         private const val SILENCE_END_MS = 900
         private const val SILENCE_RMS = 500.0
+
+        /** Restarts the listener so a new keyword line takes effect. No-op if it is not running. */
+        fun restart(context: Context) {
+            stop(context)
+            start(context)
+        }
 
         fun start(context: Context) {
             ContextCompat.startForegroundService(context, Intent(context, WakeWordService::class.java))

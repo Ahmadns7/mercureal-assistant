@@ -38,6 +38,9 @@ import kotlinx.coroutines.withContext
  * silence (default 60 s), when the user says an end phrase, or when hold-to-talk takes over.
  * The mic is not captured while the reply is being spoken, and wake-word hits are ignored during
  * speech and for a short echo tail afterwards.
+ *
+ * Every answered turn is saved to the on-device history (see [com.ahmadns7.mercureal.assistant.history.HistoryStore]).
+ * The last few turns are passed to the LLM so follow-ups like "what did I just ask" work.
  */
 class AssistantController(context: Context, val repo: ModelRepository) {
 
@@ -59,6 +62,9 @@ class AssistantController(context: Context, val repo: ModelRepository) {
     private val turnLock = Mutex()
     @Volatile private var sessionCancelled = false
     @Volatile private var quietUntil = 0L
+
+    /** Groups the turns of one conversation session in the history. New id per session. */
+    @Volatile private var sessionId: String = java.util.UUID.randomUUID().toString()
 
     private var loadedStt: String? = null
     private var loadedLlm: String? = null
@@ -112,6 +118,7 @@ class AssistantController(context: Context, val repo: ModelRepository) {
 
     private suspend fun runSession(firstPcm: FloatArray) {
         sessionCancelled = false
+        sessionId = java.util.UUID.randomUUID().toString()
         micInUse = true
         var pcm: FloatArray? = firstPcm
         try {
@@ -164,6 +171,7 @@ class AssistantController(context: Context, val repo: ModelRepository) {
                 ?: Languages.byCode(Languages.DEFAULT_TARGET)!!
             state.label = "translating"
             val translated = withContext(Dispatchers.Default) { llm.translate(translation.text, target.name) }
+            saveTurn(text, translated, "translate")
             state.reply = translated
             state.label = "speaking"
             // The bundled voice is English-only: only speak English output, otherwise show it.
@@ -182,6 +190,7 @@ class AssistantController(context: Context, val repo: ModelRepository) {
         val device = DeviceCommands.parse(text)
         if (device !is DeviceCommand.None) {
             val reply = deviceActions.run(device) ?: "ok"
+            saveTurn(text, reply, "device")
             state.reply = reply
             state.label = "speaking"
             try {
@@ -192,21 +201,25 @@ class AssistantController(context: Context, val repo: ModelRepository) {
             return true
         }
 
-        val reply = when (val intent = VoiceIntents.parse(text)) {
+        val (reply, mode) = when (val intent = VoiceIntents.parse(text)) {
             is VoiceIntent.Remember -> {
                 notes.add(intent.text)
-                "got it, saved."
+                "got it, saved." to "note"
             }
             is VoiceIntent.Recall -> {
                 state.label = "thinking"
                 val memory = VoiceIntents.memoryContext(notes.all(), intent.topic)
-                withContext(Dispatchers.Default) { llm.respond(text, memory) }
+                val recent = repo.history.recentContext()
+                val combined = listOfNotNull(memory, recent).joinToString("\n\n")
+                withContext(Dispatchers.Default) { llm.respond(text, combined) } to "recall"
             }
             VoiceIntent.None -> {
                 state.label = "thinking"
-                withContext(Dispatchers.Default) { llm.respond(text) }
+                val recent = repo.history.recentContext()
+                withContext(Dispatchers.Default) { llm.respond(text, recent) } to "chat"
             }
         }
+        saveTurn(text, reply, mode)
         state.reply = reply
         state.label = "speaking"
         try {
@@ -215,6 +228,12 @@ class AssistantController(context: Context, val repo: ModelRepository) {
             quietUntil = System.currentTimeMillis() + ECHO_TAIL_MS
         }
         return true
+    }
+
+    /** Saves an answered turn to history. A failed save never blocks the reply. */
+    private suspend fun saveTurn(question: String, answer: String, mode: String) {
+        if (answer.isBlank()) return
+        runCatching { repo.history.record(sessionId, mode, question, answer) }
     }
 
     /**

@@ -13,8 +13,8 @@ import java.io.File
 /**
  * Streaming keyword spotter (sherpa-onnx KWS zipformer, int8 encoder, chunk-16).
  * Fail closed: [create] throws unless every model file and the keywords file is present.
- * Keywords are phoneme lines in assets/wake/keywords.txt, copied to private storage on start,
- * so tuning is a file swap.
+ * Keywords are phoneme lines built from the chosen wake phrase (see WakePhrase), passed in as text
+ * and written to private storage on start. Changing the phrase needs a listener restart.
  */
 class WakeWordDetector private constructor(
     private val spotter: KeywordSpotter,
@@ -44,22 +44,19 @@ class WakeWordDetector private constructor(
 
     companion object {
         const val SAMPLE_RATE = 16_000
-        private const val KEYWORDS_ASSET = "wake/keywords.txt"
-
-        /** Throws IllegalStateException when the model or keywords are missing (fail closed). */
-        fun create(context: Context, store: ModelStore): WakeWordDetector {
+        /**
+         * Throws IllegalStateException when the model or keywords are missing (fail closed).
+         * [keywords] are the phoneme lines for the chosen wake phrase (see WakePhrase), written to
+         * private storage on every start, so a phrase change takes effect after a restart.
+         */
+        fun create(store: ModelStore, keywords: String): WakeWordDetector {
             val spec = ModelCatalog.byId(ModelCatalog.KWS_ID)
                 ?: error("wake word model is not in the catalog")
             check(store.isInstalled(spec)) { "wake word model is not downloaded. Get it in Settings > Models." }
+            check(keywords.isNotBlank()) { "wake word keywords are empty" }
 
             val keywordsFile = store.dirFile("kws-keywords.txt")
-            val kwBytes = try {
-                context.assets.open(KEYWORDS_ASSET).use { it.readBytes() }
-            } catch (e: java.io.IOException) {
-                error("wake word keywords file is missing from the app")
-            }
-            check(kwBytes.isNotEmpty()) { "wake word keywords file is empty" }
-            keywordsFile.writeBytes(kwBytes)
+            keywordsFile.writeText(keywords.trim() + "\n")
 
             fun f(name: String) = store.dirFile(name).absolutePath
             val config = KeywordSpotterConfig(

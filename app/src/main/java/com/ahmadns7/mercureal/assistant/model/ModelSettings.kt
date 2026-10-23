@@ -100,10 +100,54 @@ class ModelSettings(private val context: Context) {
         context.modelSettingsStore.edit { it[llmKey] = id }
     }
 
+    private val wakePhraseKey = stringPreferencesKey("wake_phrase")
+    private val wakeKeywordsKey = stringPreferencesKey("wake_keywords")
+    private val retentionDaysKey = intPreferencesKey("history_retention_days")
+    private val retentionTurnsKey = intPreferencesKey("history_retention_turns")
+
+    /** The wake phrase the user listens for (see WakePhrase). Default "ahmad". */
+    val wakePhrase: Flow<String> = context.modelSettingsStore.data.map {
+        it[wakePhraseKey] ?: com.ahmadns7.mercureal.assistant.wake.WakePhrase.DEFAULT_PHRASE
+    }
+
+    /** Keyword lines for the kws model built from the phrase. Empty means use the default. */
+    val wakeKeywords: Flow<String> = context.modelSettingsStore.data.map {
+        it[wakeKeywordsKey] ?: com.ahmadns7.mercureal.assistant.wake.WakePhrase.DEFAULT_KEYWORDS
+    }
+
+    suspend fun setWakePhrase(phrase: String, keywords: String) {
+        context.modelSettingsStore.edit {
+            it[wakePhraseKey] = phrase
+            it[wakeKeywordsKey] = keywords
+        }
+    }
+
+    /** History retention: turns older than this many days are deleted. Allowed: 7, 30, 90. Default 30. */
+    val retentionDays: Flow<Int> = context.modelSettingsStore.data.map {
+        (it[retentionDaysKey] ?: 30).takeIf { d -> d in RETENTION_DAYS } ?: 30
+    }
+
+    suspend fun setRetentionDays(days: Int) {
+        require(days in RETENTION_DAYS)
+        context.modelSettingsStore.edit { it[retentionDaysKey] = days }
+    }
+
+    /** History cap: only this many newest turns are kept. Allowed: 200, 500, 1000. Default 500. */
+    val retentionTurns: Flow<Int> = context.modelSettingsStore.data.map {
+        (it[retentionTurnsKey] ?: 500).takeIf { t -> t in RETENTION_TURNS } ?: 500
+    }
+
+    suspend fun setRetentionTurns(turns: Int) {
+        require(turns in RETENTION_TURNS)
+        context.modelSettingsStore.edit { it[retentionTurnsKey] = turns }
+    }
+
     private fun resolve(saved: String?, kind: ModelKind, default: String): String =
         if (saved != null && ModelCatalog.byId(saved)?.kind == kind) saved else default
 
     companion object {
         val FOLLOW_UP_OPTIONS = listOf(30, 60, 120)
+        val RETENTION_DAYS = listOf(7, 30, 90)
+        val RETENTION_TURNS = listOf(200, 500, 1000)
     }
 }
