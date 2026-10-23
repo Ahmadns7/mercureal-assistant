@@ -10,6 +10,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // sherpa-onnx AAR, fetched and sha256-checked by scripts/setup_native.sh
+        flatDir { dirs(rootDir.resolve("app/libs")) }
     }
 }
 rootProject.name = "mercureal-assistant"

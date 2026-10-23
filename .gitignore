@@ -8,6 +8,7 @@ captures/
 .externalNativeBuild/
 .cxx/
 *.apk
+app/libs/*.aar
 *.aab
 # model files are large and sideloaded, never commit them
 models/*.bin

@@ -1,6 +1,6 @@
 package com.ahmadns7.mercureal.assistant.model
 
-enum class ModelKind { STT, LLM }
+enum class ModelKind { STT, LLM, TTS }
 
 /** Chat template used to wrap the prompt for an instruct LLM. */
 enum class PromptFormat { CHATML, LLAMA3 }
@@ -27,12 +27,14 @@ object ModelCatalog {
 
     const val DEFAULT_STT = "whisper-tiny.en"
     const val DEFAULT_LLM = "qwen2.5-0.5b-instruct-q4_k_m"
+    const val DEFAULT_TTS = "vits-ljs-int8"
 
     private const val WHISPER_REV = "5359861c739e955e79d9a303bcbc70fb988958b1"
     private const val QWEN_REV = "9217f5db79a29953eb74d5343926648285ec7e67"
     private const val LLAMA_REV = "067b946cf014b7c697f3654f621d577a3e3afd1c"
     private const val QWEN_Q3_REV = "41ba88dbac95fed2528c92514c131d73eb5a174b"
     private const val SMOLLM2_REV = "7be6f65f1db715fe5dc5a4634c0d459b4eed42ec"
+    private const val VITS_LJS_REV = "7ac337c834f318e45a34037cb3371cc3929187ff"
 
     private const val WHISPER_REPO = "https://huggingface.co/ggerganov/whisper.cpp"
     private const val QWEN_REPO = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF"
@@ -41,8 +43,21 @@ object ModelCatalog {
     private const val SMOLLM2_REPO = "https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF"
 
     private const val WHISPER_SOURCE = "ggerganov/whisper.cpp on Hugging Face"
+    private const val VITS_LJS_REPO = "https://huggingface.co/csukuangfj/vits-ljs"
 
     val all: List<ModelSpec> = listOf(
+        ModelSpec(
+            id = "vits-ljs-int8",
+            kind = ModelKind.TTS,
+            displayName = "VITS LJSpeech, English (int8, sherpa-onnx)",
+            fileName = "vits-ljs.int8.onnx",
+            url = VITS_LJS_REPO + "/resolve/" + VITS_LJS_REV + "/vits-ljs.int8.onnx",
+            sizeBytes = 37_423_560L,
+            sha256 = "b3aa88de0202a040d7d75bac9dbf1a59d81d60c7369046f32241afa7dec65cc1",
+            license = "Apache-2.0",
+            licenseUrl = VITS_LJS_REPO,
+            source = "csukuangfj/vits-ljs on Hugging Face (sherpa-onnx VITS, LJSpeech; tokens and lexicon are bundled in the app)",
+        ),
         ModelSpec(
             id = "whisper-tiny.en",
             kind = ModelKind.STT,

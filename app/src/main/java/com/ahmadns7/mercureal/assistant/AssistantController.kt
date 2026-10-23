@@ -20,7 +20,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Orchestrates the fully on-device pipeline:
- * mic PCM -> whisper.cpp (STT) -> llama.cpp (LLM) -> Android TTS.
+ * mic PCM -> whisper.cpp (STT) -> llama.cpp (LLM) -> sherpa-onnx (offline TTS).
  * The active STT/LLM are read from settings each turn, so a switch in
  * Settings > Models takes effect on the next utterance.
  */
@@ -32,10 +32,11 @@ class AssistantController(context: Context, private val repo: ModelRepository) {
     private val recorder = MicRecorder()
     private val stt = SttEngine()
     private val llm = LlmEngine()
-    private val tts = Tts(context)
+    private val tts = Tts(context, repo.store)
 
     private var loadedStt: String? = null
     private var loadedLlm: String? = null
+    private var loadedTts: String? = null
 
     fun startListening() {
         state.label = "listening"
@@ -59,7 +60,7 @@ class AssistantController(context: Context, private val repo: ModelRepository) {
                 val reply = withContext(Dispatchers.Default) { llm.respond(text) }
                 state.reply = reply
                 state.label = "speaking"
-                tts.speak(reply)
+                withContext(Dispatchers.IO) { tts.speak(reply) }
                 state.label = "idle"
             } catch (e: Exception) {
                 state.label = "error: ${e.message}"
@@ -79,6 +80,12 @@ class AssistantController(context: Context, private val repo: ModelRepository) {
             llm.load(repo.store.fileFor(spec), spec.promptFormat ?: PromptFormat.CHATML)
             loadedLlm = llmId
         }
+        // Fails loudly (no speech, no system voice) if the offline voice is missing or broken.
+        val ttsId = repo.settings.activeTts.first()
+        if (ttsId != loadedTts) {
+            tts.load(installedSpec(ttsId))
+            loadedTts = ttsId
+        }
     }
 
     private fun installedSpec(id: String): ModelSpec {
@@ -93,7 +100,7 @@ class AssistantController(context: Context, private val repo: ModelRepository) {
         recorder.stop()
         stt.close()
         llm.close()
-        tts.shutdown()
+        tts.close()
         repo.release()
         scope.cancel()
     }

@@ -14,6 +14,7 @@ class ModelSettings(private val context: Context) {
 
     private val sttKey = stringPreferencesKey("active_stt")
     private val llmKey = stringPreferencesKey("active_llm")
+    private val ttsKey = stringPreferencesKey("active_tts")
 
     val activeStt: Flow<String> = context.modelSettingsStore.data.map {
         resolve(it[sttKey], ModelKind.STT, ModelCatalog.DEFAULT_STT)
@@ -21,6 +22,14 @@ class ModelSettings(private val context: Context) {
 
     val activeLlm: Flow<String> = context.modelSettingsStore.data.map {
         resolve(it[llmKey], ModelKind.LLM, ModelCatalog.DEFAULT_LLM)
+    }
+
+    val activeTts: Flow<String> = context.modelSettingsStore.data.map {
+        resolve(it[ttsKey], ModelKind.TTS, ModelCatalog.DEFAULT_TTS)
+    }
+
+    suspend fun setActiveTts(id: String) {
+        context.modelSettingsStore.edit { it[ttsKey] = id }
     }
 
     suspend fun setActiveStt(id: String) {

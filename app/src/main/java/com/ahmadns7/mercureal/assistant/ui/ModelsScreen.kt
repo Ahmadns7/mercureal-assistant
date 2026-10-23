@@ -40,6 +40,7 @@ fun ModelsScreen(repo: ModelRepository, onBack: () -> Unit) {
     val installed by repo.installed.collectAsState()
     val activeStt by repo.settings.activeStt.collectAsState(initial = ModelCatalog.DEFAULT_STT)
     val activeLlm by repo.settings.activeLlm.collectAsState(initial = ModelCatalog.DEFAULT_LLM)
+    val activeTts by repo.settings.activeTts.collectAsState(initial = ModelCatalog.DEFAULT_TTS)
     val scope = rememberCoroutineScope()
     val usedBytes = remember(installed) { repo.store.bytesUsed() }
 
@@ -88,6 +89,31 @@ fun ModelsScreen(repo: ModelRepository, onBack: () -> Unit) {
                 onDownload = { repo.download(spec) },
                 onCancel = { repo.cancel(spec) },
                 onUse = { scope.launch { repo.settings.setActiveLlm(spec.id) } },
+                onDelete = { scope.launch(Dispatchers.IO) { repo.delete(spec) } },
+            )
+        }
+
+        item {
+            Text(
+                "Text to speech (sherpa-onnx, offline)",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                "Replies are spoken only by this on-device voice. If no voice is installed, the app stops with an error instead of using any system voice.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        items(ModelCatalog.ofKind(ModelKind.TTS), key = { it.id }) { spec ->
+            ModelCard(
+                spec = spec,
+                isInstalled = spec.id in installed,
+                isActive = spec.id == activeTts,
+                download = downloads[spec.id],
+                partialBytes = repo.store.partialBytesFor(spec),
+                onDownload = { repo.download(spec) },
+                onCancel = { repo.cancel(spec) },
+                onUse = { scope.launch { repo.settings.setActiveTts(spec.id) } },
                 onDelete = { scope.launch(Dispatchers.IO) { repo.delete(spec) } },
             )
         }

@@ -62,4 +62,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+    // Offline TTS (sherpa-onnx 2.0.0, prebuilt arm64 AAR; see scripts/setup_native.sh for the pin)
+    implementation(name = "sherpa-onnx-2.0.0", ext = "aar")
 }

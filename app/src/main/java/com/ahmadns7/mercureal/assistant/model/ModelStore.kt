@@ -35,5 +35,8 @@ class ModelStore(context: Context) {
         partFileFor(spec).delete()
     }
 
-    fun bytesUsed(): Long = dir.listFiles()?.sumOf { it.length() } ?: 0L
+    /** Directory for TTS companion files (tokens, lexicon) staged from the app's bundled assets. */
+    fun ttsAuxDir(): File = File(dir, "tts").apply { mkdirs() }
+
+    fun bytesUsed(): Long = dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
 }
