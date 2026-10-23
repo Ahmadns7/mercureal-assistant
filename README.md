@@ -102,3 +102,13 @@ MIT. See LICENSE.
 - Speech: `whisper-tiny` and `whisper-small` (ggml, multilingual) are in Models. In Settings, pick a speech language or leave it on auto (detection). English-only `.en` models always listen as English.
 - Translation: turn on Translation in Settings, then say "say <text> in french" or "translate <text> to spanish". The on-device Qwen LLM does the translation, so no extra model or permission is needed. Quality for small languages (yoruba, hausa, swahili) depends on the 0.5B model and is not verified.
 - Speech output: the bundled voice (vits-ljs) is English-only. Non-English translations are shown on screen and the app says so aloud.
+
+
+## Dictation
+Open the app and tap "dictate" (or use the Dictate launcher shortcut). Speak, and the phone transcribes it on device with whisper.cpp. The text is copied to the clipboard and a share sheet opens so you can send it to any app. Works offline.
+
+## MercuReal Pro
+Free users get 20 conversations per local day. MercuReal Pro (one-time purchase, product id mercureal_pro) removes the cap. The product id is set in billing/BillingConfig.kt. In debug builds, Settings > Pro has a local test switch so premium features can be tried without Play. Setup for Play Console is in RELEASE.md.
+
+## Release builds
+Signing is configured via environment variables or keystore.properties (see RELEASE.md). R8 minification and resource shrinking are on for release; keep rules live in app/proguard-rules.pro (JNI, sherpa-onnx, billing).
