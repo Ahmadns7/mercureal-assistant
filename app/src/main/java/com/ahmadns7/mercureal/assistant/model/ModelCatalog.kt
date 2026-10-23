@@ -31,10 +31,14 @@ object ModelCatalog {
     private const val WHISPER_REV = "5359861c739e955e79d9a303bcbc70fb988958b1"
     private const val QWEN_REV = "9217f5db79a29953eb74d5343926648285ec7e67"
     private const val LLAMA_REV = "067b946cf014b7c697f3654f621d577a3e3afd1c"
+    private const val QWEN_Q3_REV = "41ba88dbac95fed2528c92514c131d73eb5a174b"
+    private const val SMOLLM2_REV = "7be6f65f1db715fe5dc5a4634c0d459b4eed42ec"
 
     private const val WHISPER_REPO = "https://huggingface.co/ggerganov/whisper.cpp"
     private const val QWEN_REPO = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF"
     private const val LLAMA_REPO = "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF"
+    private const val QWEN_Q3_REPO = "https://huggingface.co/bartowski/Qwen2.5-0.5B-Instruct-GGUF"
+    private const val SMOLLM2_REPO = "https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF"
 
     private const val WHISPER_SOURCE = "ggerganov/whisper.cpp on Hugging Face"
 
@@ -86,6 +90,32 @@ object ModelCatalog {
             license = "Apache-2.0",
             licenseUrl = QWEN_REPO,
             source = "Qwen/Qwen2.5-0.5B-Instruct-GGUF (official Qwen repo)",
+            promptFormat = PromptFormat.CHATML,
+        ),
+        ModelSpec(
+            id = "qwen2.5-0.5b-instruct-q3_k_s",
+            kind = ModelKind.LLM,
+            displayName = "Qwen2.5 0.5B Instruct (Q3_K_S)",
+            fileName = "Qwen2.5-0.5B-Instruct-Q3_K_S.gguf",
+            url = QWEN_Q3_REPO + "/resolve/" + QWEN_Q3_REV + "/Qwen2.5-0.5B-Instruct-Q3_K_S.gguf",
+            sizeBytes = 338_263_456L,
+            sha256 = "468787b643ef9081a75c6e7bd98da987f46583250248e0a0a7aca173308e8d34",
+            license = "Apache-2.0",
+            licenseUrl = QWEN_Q3_REPO,
+            source = "bartowski/Qwen2.5-0.5B-Instruct-GGUF (quantized from Qwen/Qwen2.5-0.5B-Instruct)",
+            promptFormat = PromptFormat.CHATML,
+        ),
+        ModelSpec(
+            id = "smollm2-360m-instruct-q4_0",
+            kind = ModelKind.LLM,
+            displayName = "SmolLM2 360M Instruct (Q4_0)",
+            fileName = "SmolLM2-360M-Instruct-Q4_0.gguf",
+            url = SMOLLM2_REPO + "/resolve/" + SMOLLM2_REV + "/SmolLM2-360M-Instruct-Q4_0.gguf",
+            sizeBytes = 229_733_280L,
+            sha256 = "c3608933eb6e5763b87f769bda40c204dc158333668c7af214644fe39da58627",
+            license = "Apache-2.0",
+            licenseUrl = SMOLLM2_REPO,
+            source = "bartowski/SmolLM2-360M-Instruct-GGUF (quantized from HuggingFaceTB/SmolLM2-360M-Instruct)",
             promptFormat = PromptFormat.CHATML,
         ),
         ModelSpec(
