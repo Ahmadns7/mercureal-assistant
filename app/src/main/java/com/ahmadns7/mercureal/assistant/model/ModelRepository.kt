@@ -25,7 +25,6 @@ class ModelRepository(context: Context) {
 
     val store = ModelStore(context)
     val settings = ModelSettings(context)
-    val entitlements = com.ahmadns7.mercureal.assistant.model.Entitlements(context)
     val notes = com.ahmadns7.mercureal.assistant.memory.NoteStore(context)
     val history = com.ahmadns7.mercureal.assistant.history.HistoryStore(context, settings)
 

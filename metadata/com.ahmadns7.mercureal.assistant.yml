@@ -1,0 +1,69 @@
+# F-Droid metadata draft for MercuReal. Package id: com.ahmadns7.mercureal.assistant (applicationId in
+# app/build.gradle.kts). This file is copied into F-Droid's fdroiddata repo as metadata/<id>.yml when the
+# app is submitted via an RFP (see RELEASE.md). Field reference: https://f-droid.org/docs/Build_Metadata_Reference/
+
+Categories:
+  - Connectivity
+  - Multimedia
+License: MIT
+AuthorName: Ahmadns7
+WebSite: https://github.com/Ahmadns7/mercureal-assistant
+SourceCode: https://github.com/Ahmadns7/mercureal-assistant
+IssueTracker: https://github.com/Ahmadns7/mercureal-assistant/issues
+Changelog: https://github.com/Ahmadns7/mercureal-assistant/releases
+Donate: # none set. Add a link here only if the author adds one.
+
+AutoName: MercuReal
+
+RepoType: git
+Repo: https://github.com/Ahmadns7/mercureal-assistant.git
+
+# Anti-features the packager should review before merging. Declared here so reviewers see them up front:
+# - The app downloads model files from Hugging Face over HTTPS, only when the user chooses (see README,
+#   Privacy and network use). Nothing is sent to the network except those downloads.
+# - Voice input and prompts never leave the device. No tracking, no analytics, no ads, no accounts.
+AntiFeatures:
+  NonFreeNet:
+    en-US: >-
+      The app can download model files from huggingface.co (user-initiated, checksum-verified). No
+      user data is sent. Listed for transparency only, the app works fully offline once models are on
+      the device.
+
+Builds:
+  - versionName: 0.2.0
+    versionCode: 2
+    # TODO before submitting: set commit to a release tag (for example v0.2.0) that contains this metadata
+    # and the billing removal. A branch name or a moving master commit is not accepted by fdroiddata.
+    commit: "TODO-tag-v0.2.0"
+    subdir: app
+    submodules: true
+    # F-Droid runs the build in a clean environment. Native deps (whisper.cpp, llama.cpp) are git submodules,
+    # so submodules: true fetches them at the pinned commits recorded in .gitmodules.
+    #
+    # IMPORTANT, packager must read this:
+    # sherpa-onnx 2.0.0 is NOT built from source here. It is a prebuilt arm64 AAR from the upstream
+    # GitHub release, pinned by sha256 in scripts/setup_native.sh:
+    #   file:    app/libs/sherpa-onnx-2.0.0.aar
+    #   url:     https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.0/sherpa-onnx-2.0.0.aar
+    #   sha256:  f0f8716982d27cb4ce695e3934018b1342d9d3d6fdb6ef1f1658fe8bad50b4fc
+    #   license: Apache-2.0 (sherpa-onnx, k2-fsa)
+    # Because it is a binary blob in the build, F-Droid may flag it as a non-free or prebuilt binary
+    # unless it is either built from source (sherpa-onnx source build via its own CMake) or the packager
+    # accepts a checksum-pinned upstream artifact. The sha256 above is what the setup script enforces.
+    # Recommended: prebuild step below downloads and verifies the AAR (same check as setup_native.sh),
+    # or move the AAR into the repo (license-compatible, Apache-2.0).
+    prebuild: bash scripts/setup_native.sh
+    gradle:
+      - yes
+    # Target and output: F-Droid signs the APK itself, so build the release variant unsigned.
+    # The release variant falls back to debug signing when no keystore is configured (see app/build.gradle.kts).
+    # Output: app/build/outputs/apk/release/app-release-unsigned.apk (or app-release.apk when re-signed).
+    ndk: 27.0.12077973
+    # NDK and CMake 3.22.1 are required for the JNI build. Confirm the packager has them on the build server.
+    srclibs: []
+    # ABI filter is arm64-v8a only (app/build.gradle.kts). No x86 build.
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 0.2.0
+CurrentVersionCode: 2

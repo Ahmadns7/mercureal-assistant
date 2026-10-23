@@ -97,8 +97,6 @@ dependencies {
     // Offline TTS (sherpa-onnx 2.0.0, prebuilt arm64 AAR; see scripts/setup_native.sh for the pin)
     implementation(files("libs/sherpa-onnx-2.0.0.aar"))
 
-    // Google Play Billing: one-time "mercureal_pro" purchase (see billing/BillingConfig.kt)
-    implementation("com.android.billingclient:billing-ktx:7.1.1")
     // Archive extraction for model downloads (tar.bz2, zip). Verified per member by sha256.
     implementation("org.apache.commons:commons-compress:1.27.1")
 }

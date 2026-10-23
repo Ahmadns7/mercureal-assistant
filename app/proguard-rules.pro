@@ -6,9 +6,7 @@
 -keep class com.ahmadns7.mercureal.assistant.engine.** { *; }
 # sherpa-onnx ships JNI bindings that look classes up by name.
 -keep class com.k2fsa.sherpa.onnx.** { *; }
-# Play Billing and DataStore/Room are reflection-safe with their shipped rules; keep ours explicit.
--keep class com.ahmadns7.mercureal.assistant.billing.** { *; }
--keep class com.android.billingclient.** { *; }
+# DataStore/Room are reflection-safe with their shipped rules; keep ours explicit.
 # Keep line numbers for crash reports.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
