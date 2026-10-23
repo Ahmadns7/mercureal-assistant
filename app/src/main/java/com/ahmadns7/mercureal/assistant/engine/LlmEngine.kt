@@ -50,8 +50,10 @@ class LlmEngine {
     companion object {
         init { System.loadLibrary("mercureal_native") }
         const val THREADS = 4
+        /** KV-cache size in tokens. Turns are stateless, so this only needs to fit one prompt plus reply. */
         const val CONTEXT_TOKENS = 2048
-        const val MAX_REPLY_TOKENS = 256
+        /** Upper bound on generated tokens per reply (replies are one or two sentences). */
+        const val MAX_REPLY_TOKENS = 160
         private const val SYSTEM = "You are a concise, private voice assistant. Answer in one or two short sentences."
     }
 }

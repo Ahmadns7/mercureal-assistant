@@ -67,6 +67,7 @@ fun ModelsScreen(repo: ModelRepository, onBack: () -> Unit) {
                 isInstalled = spec.id in installed,
                 isActive = spec.id == activeStt,
                 download = downloads[spec.id],
+                partialBytes = repo.store.partialBytesFor(spec),
                 onDownload = { repo.download(spec) },
                 onCancel = { repo.cancel(spec) },
                 onUse = { scope.launch { repo.settings.setActiveStt(spec.id) } },
@@ -83,6 +84,7 @@ fun ModelsScreen(repo: ModelRepository, onBack: () -> Unit) {
                 isInstalled = spec.id in installed,
                 isActive = spec.id == activeLlm,
                 download = downloads[spec.id],
+                partialBytes = repo.store.partialBytesFor(spec),
                 onDownload = { repo.download(spec) },
                 onCancel = { repo.cancel(spec) },
                 onUse = { scope.launch { repo.settings.setActiveLlm(spec.id) } },
@@ -98,6 +100,7 @@ private fun ModelCard(
     isInstalled: Boolean,
     isActive: Boolean,
     download: DownloadState?,
+    partialBytes: Long,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
     onUse: () -> Unit,
@@ -118,15 +121,26 @@ private fun ModelCard(
                         progress = download.progress,
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     )
-                    Text("downloading ${(download.progress * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                    val label = if (download.resumedFrom > 0L) {
+                        "resuming from ${formatBytes(download.resumedFrom)}: ${(download.progress * 100).toInt()}%"
+                    } else {
+                        "downloading ${(download.progress * 100).toInt()}%"
+                    }
+                    Text(label, style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(onClick = onCancel, modifier = Modifier.padding(top = 4.dp)) { Text("cancel") }
                 }
                 download is DownloadState.Failed -> {
                     Text(
-                        "download failed: ${download.message}. the partial file was removed.",
+                        if (download.partKept) {
+                            "download interrupted: ${download.message}. progress was saved, retry resumes it."
+                        } else {
+                            "download failed: ${download.message}. the partial file was removed."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    Button(onClick = onDownload, modifier = Modifier.padding(top = 4.dp)) { Text("retry download") }
+                    Button(onClick = onDownload, modifier = Modifier.padding(top = 4.dp)) {
+                        Text(if (download.partKept) "resume download" else "retry download")
+                    }
                 }
                 isInstalled -> {
                     Text(
@@ -146,7 +160,17 @@ private fun ModelCard(
                     }
                 }
                 else -> {
-                    Button(onClick = onDownload, modifier = Modifier.padding(top = 4.dp)) { Text("download") }
+                    val partial = partialBytes
+                    if (partial > 0L) {
+                        Text(
+                            "${formatBytes(partial)} already downloaded, will resume.",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    Button(onClick = onDownload, modifier = Modifier.padding(top = 4.dp)) {
+                        Text(if (partial > 0L) "resume download" else "download")
+                    }
                 }
             }
         }

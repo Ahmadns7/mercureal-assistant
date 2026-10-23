@@ -14,8 +14,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed interface DownloadState {
-    data class Running(val progress: Float) : DownloadState
-    data class Failed(val message: String) : DownloadState
+    /** [resumedFrom] is the byte offset the transfer started from (0 when it is a fresh download). */
+    data class Running(val progress: Float, val resumedFrom: Long = 0L) : DownloadState
+    /** [partKept] is true when the partial file is still on disk and a retry resumes it. */
+    data class Failed(val message: String, val partKept: Boolean) : DownloadState
 }
 
 /** Download queue and installed-state for the Models screen. */
@@ -38,15 +40,29 @@ class ModelRepository(context: Context) {
         jobs[spec.id] = scope.launch {
             _downloads.update { it + (spec.id to DownloadState.Running(0f)) }
             try {
-                ModelDownloader.download(spec, store) { p ->
-                    _downloads.update { it + (spec.id to DownloadState.Running(p)) }
-                }
+                ModelDownloader.download(
+                    spec = spec,
+                    store = store,
+                    onStart = { from ->
+                        _downloads.update { it + (spec.id to DownloadState.Running(0f, from)) }
+                    },
+                    onProgress = { p ->
+                        _downloads.update {
+                            val resumed = (it[spec.id] as? DownloadState.Running)?.resumedFrom ?: 0L
+                            it + (spec.id to DownloadState.Running(p, resumed))
+                        }
+                    },
+                )
                 _downloads.update { it - spec.id }
             } catch (e: CancellationException) {
+                // Cancel keeps the .part for a later resume.
                 _downloads.update { it - spec.id }
                 throw e
             } catch (e: Exception) {
-                _downloads.update { it + (spec.id to DownloadState.Failed(e.message ?: "download failed")) }
+                val kept = e !is ModelVerificationException && store.partFileFor(spec).isFile
+                _downloads.update {
+                    it + (spec.id to DownloadState.Failed(e.message ?: "download failed", kept))
+                }
             } finally {
                 _installed.value = computeInstalled()
             }
@@ -57,7 +73,7 @@ class ModelRepository(context: Context) {
         jobs.remove(spec.id)?.cancel()
     }
 
-    /** Deletes the downloaded file. The UI disables delete for the active model. */
+    /** Deletes the downloaded file and any partial download. The UI disables delete for the active model. */
     fun delete(spec: ModelSpec) {
         store.delete(spec)
         _downloads.update { it - spec.id }

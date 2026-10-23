@@ -19,7 +19,7 @@ Java_com_ahmadns7_mercureal_assistant_engine_LlmEngine_nativeInit(
 
     llama_model_params mparams = llama_model_default_params();
     mparams.n_gpu_layers = 0;
-    llama_model *model = llama_load_model_from_file(path, mparams);
+    llama_model *model = llama_model_load_from_file(path, mparams);
     env->ReleaseStringUTFChars(jpath, path);
     if (!model) {
         __android_log_print(ANDROID_LOG_ERROR, TAG, "llama model load failed");
@@ -30,7 +30,7 @@ Java_com_ahmadns7_mercureal_assistant_engine_LlmEngine_nativeInit(
     cparams.n_ctx = nCtx;
     cparams.n_threads = threads;
     cparams.n_threads_batch = threads;
-    llama_context *ctx = llama_new_context_with_model(model, cparams);
+    llama_context *ctx = llama_init_from_model(model, cparams);
     if (!ctx) {
         llama_free_model(model);
         return 0;

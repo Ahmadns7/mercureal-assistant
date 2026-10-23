@@ -24,6 +24,12 @@ class ModelStore(context: Context) {
         return f.isFile && f.length() == spec.sizeBytes
     }
 
+    /** Bytes of an unfinished download kept in the .part file (0 when there is none). */
+    fun partialBytesFor(spec: ModelSpec): Long {
+        val f = partFileFor(spec)
+        return if (f.isFile) f.length() else 0L
+    }
+
     fun delete(spec: ModelSpec) {
         fileFor(spec).delete()
         partFileFor(spec).delete()
