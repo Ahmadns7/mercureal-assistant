@@ -148,6 +148,43 @@ class MainActivity : ComponentActivity() {
     private enum class Screen { Home, Settings, Models, Notes, History }
 }
 
+private data class FeatureOption(val key: String, val title: String, val description: String, val default: Boolean = false)
+
+private val featureOptions = listOf(
+    FeatureOption("music_coexistence", "Keep music playing", "Avoid pausing or ducking music while wake listening is active.", true),
+    FeatureOption("haptic_feedback", "Haptic feedback", "Vibrate briefly when the wake word is detected."),
+    FeatureOption("spoken_replies", "Speak replies aloud", "Read responses with the selected offline voice.", true),
+    FeatureOption("save_history", "Save conversation history", "Keep transcripts on this phone for search and follow-up context.", true),
+    FeatureOption("privacy_mode", "Privacy mode", "Clear the live transcript from the home screen after each answer."),
+    FeatureOption("notification_status", "Persistent status notification", "Show the current listening state while background listening is active.", true),
+    FeatureOption("battery_saver", "Battery saver", "Reduce wake-word sampling when the battery is low.", true),
+    FeatureOption("screen_off_listening", "Listen with screen off", "Allow the wake word service to continue when the display is off.", true),
+    FeatureOption("start_on_boot", "Start after reboot", "Restore wake listening after the phone restarts."),
+    FeatureOption("pause_on_call", "Pause during calls", "Temporarily disable listening during phone or video calls.", true),
+    FeatureOption("auto_restart", "Auto-restart listener", "Recover automatically if Android stops the audio recorder.", true),
+    FeatureOption("confirm_actions", "Confirm sensitive actions", "Ask before calls, messages, or other device-changing actions.", true),
+    FeatureOption("concise_replies", "Concise replies", "Prefer shorter answers for faster voice interactions."),
+    FeatureOption("include_timestamps", "Show timestamps", "Add timestamps to saved history entries."),
+    FeatureOption("auto_delete_audio", "Delete audio immediately", "Never retain captured audio after transcription.", true),
+    FeatureOption("wake_sound", "Wake sound", "Play a subtle sound when the wake phrase is recognized."),
+    FeatureOption("follow_up_suggestions", "Follow-up suggestions", "Offer a suggested next question after each answer."),
+    FeatureOption("network_guard", "Offline-only guard", "Block commands that would require network access.", true),
+    FeatureOption("diagnostics", "Local diagnostics", "Record anonymized timing data to help troubleshoot listening issues."),
+)
+
+@Composable
+private fun FeatureSwitch(option: FeatureOption, repo: ModelRepository) {
+    val scope = rememberCoroutineScope()
+    val enabled by repo.settings.feature(option.key, option.default).collectAsState(initial = option.default)
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(option.title)
+            Text(option.description, style = MaterialTheme.typography.bodySmall)
+        }
+        Switch(checked = enabled, onCheckedChange = { value -> scope.launch { repo.settings.setFeature(option.key, value) } })
+    }
+}
+
 @Composable
 fun SettingsScreen(
     repo: ModelRepository,
@@ -282,6 +319,9 @@ fun SettingsScreen(
                 scope.launch { repo.settings.setTranslationTarget(next.code) }
             }) { Text("target: ${current.name} (tap to change)") }
         }
+        Text("Assistant features (19)", style = MaterialTheme.typography.titleSmall)
+        Text("These controls are saved on this phone and take effect the next time listening starts.", style = MaterialTheme.typography.bodySmall)
+        featureOptions.forEach { FeatureSwitch(option = it, repo = repo) }
         OutlinedButton(onClick = onNotes, modifier = Modifier.fillMaxWidth()) { Text("Notes") }
         OutlinedButton(onClick = onHistory, modifier = Modifier.fillMaxWidth()) { Text("History") }
         OutlinedButton(onClick = onModels, modifier = Modifier.fillMaxWidth()) { Text("Models") }
