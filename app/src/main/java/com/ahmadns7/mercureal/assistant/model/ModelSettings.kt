@@ -142,6 +142,14 @@ class ModelSettings(private val context: Context) {
         context.modelSettingsStore.edit { it[retentionTurnsKey] = turns }
     }
 
+    /** Persisted switches for optional assistant behavior. */
+    fun feature(name: String, default: Boolean = false): Flow<Boolean> =
+        context.modelSettingsStore.data.map { it[booleanPreferencesKey("feature_$name")] ?: default }
+
+    suspend fun setFeature(name: String, enabled: Boolean) {
+        context.modelSettingsStore.edit { it[booleanPreferencesKey("feature_$name")] = enabled }
+    }
+
     private fun resolve(saved: String?, kind: ModelKind, default: String): String =
         if (saved != null && ModelCatalog.byId(saved)?.kind == kind) saved else default
 

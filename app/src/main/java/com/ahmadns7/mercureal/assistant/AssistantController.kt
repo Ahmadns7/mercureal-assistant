@@ -177,7 +177,7 @@ class AssistantController(context: Context, val repo: ModelRepository) {
             // The bundled voice is English-only: only speak English output, otherwise show it.
             if (Languages.voiceCanSpeak(target)) {
                 try {
-                    withContext(Dispatchers.IO) { tts.speak(translated) }
+                    speakIfEnabled(translated)
                 } finally {
                     quietUntil = System.currentTimeMillis() + ECHO_TAIL_MS
                 }
@@ -194,7 +194,7 @@ class AssistantController(context: Context, val repo: ModelRepository) {
             state.reply = reply
             state.label = "speaking"
             try {
-                withContext(Dispatchers.IO) { tts.speak(reply) }
+                speakIfEnabled(reply)
             } finally {
                 quietUntil = System.currentTimeMillis() + ECHO_TAIL_MS
             }
@@ -223,7 +223,7 @@ class AssistantController(context: Context, val repo: ModelRepository) {
         state.reply = reply
         state.label = "speaking"
         try {
-            withContext(Dispatchers.IO) { tts.speak(reply) }
+            speakIfEnabled(reply)
         } finally {
             quietUntil = System.currentTimeMillis() + ECHO_TAIL_MS
         }
@@ -233,7 +233,17 @@ class AssistantController(context: Context, val repo: ModelRepository) {
     /** Saves an answered turn to history. A failed save never blocks the reply. */
     private suspend fun saveTurn(question: String, answer: String, mode: String) {
         if (answer.isBlank()) return
+        if (!repo.settings.feature("save_history", true).first()) return
         runCatching { repo.history.record(sessionId, mode, question, answer) }
+    }
+
+    private suspend fun speakIfEnabled(text: String) {
+        if (!repo.settings.feature("spoken_replies", true).first()) return
+        try {
+            withContext(Dispatchers.IO) { tts.speak(text) }
+        } finally {
+            quietUntil = System.currentTimeMillis() + ECHO_TAIL_MS
+        }
     }
 
     /**

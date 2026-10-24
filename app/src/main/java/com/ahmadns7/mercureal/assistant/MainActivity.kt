@@ -14,6 +14,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -111,6 +116,7 @@ class MainActivity : ComponentActivity() {
                             onModels = { screen = Screen.Models },
                             onNotes = { screen = Screen.Notes },
                             onHistory = { screen = Screen.History },
+                            onDiagnostics = { screen = Screen.Diagnostics },
                             onWakeToggle = { on, micOk ->
                                 if (on && micOk) WakeWordService.start(applicationContext)
                                 else WakeWordService.stop(applicationContext)
@@ -129,6 +135,11 @@ class MainActivity : ComponentActivity() {
                             repo = repo,
                             onBack = { screen = Screen.Settings },
                         )
+                        Screen.Diagnostics -> DiagnosticsScreen(
+                            repo = repo,
+                            state = assistant.state,
+                            onBack = { screen = Screen.Settings },
+                        )
                     }
                 }
             }
@@ -140,7 +151,44 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private enum class Screen { Home, Settings, Models, Notes, History }
+    private enum class Screen { Home, Settings, Models, Notes, History, Diagnostics }
+}
+
+private data class FeatureOption(val key: String, val title: String, val description: String, val default: Boolean = false)
+
+private val featureOptions = listOf(
+    FeatureOption("music_coexistence", "Keep music playing", "Avoid pausing or ducking music while wake listening is active.", true),
+    FeatureOption("haptic_feedback", "Haptic feedback", "Vibrate briefly when the wake word is detected."),
+    FeatureOption("spoken_replies", "Speak replies aloud", "Read responses with the selected offline voice.", true),
+    FeatureOption("save_history", "Save conversation history", "Keep transcripts on this phone for search and follow-up context.", true),
+    FeatureOption("privacy_mode", "Privacy mode", "Clear the live transcript from the home screen after each answer."),
+    FeatureOption("notification_status", "Persistent status notification", "Show the current listening state while background listening is active.", true),
+    FeatureOption("battery_saver", "Battery saver", "Reduce wake-word sampling when the battery is low.", true),
+    FeatureOption("screen_off_listening", "Listen with screen off", "Allow the wake word service to continue when the display is off.", true),
+    FeatureOption("start_on_boot", "Start after reboot", "Restore wake listening after the phone restarts."),
+    FeatureOption("pause_on_call", "Pause during calls", "Temporarily disable listening during phone or video calls.", true),
+    FeatureOption("auto_restart", "Auto-restart listener", "Recover automatically if Android stops the audio recorder.", true),
+    FeatureOption("confirm_actions", "Confirm sensitive actions", "Ask before calls, messages, or other device-changing actions.", true),
+    FeatureOption("concise_replies", "Concise replies", "Prefer shorter answers for faster voice interactions."),
+    FeatureOption("include_timestamps", "Show timestamps", "Add timestamps to saved history entries."),
+    FeatureOption("auto_delete_audio", "Delete audio immediately", "Never retain captured audio after transcription.", true),
+    FeatureOption("wake_sound", "Wake sound", "Play a subtle sound when the wake phrase is recognized."),
+    FeatureOption("follow_up_suggestions", "Follow-up suggestions", "Offer a suggested next question after each answer."),
+    FeatureOption("network_guard", "Offline-only guard", "Block commands that would require network access.", true),
+    FeatureOption("diagnostics", "Local diagnostics", "Record anonymized timing data to help troubleshoot listening issues."),
+)
+
+@Composable
+private fun FeatureSwitch(option: FeatureOption, repo: ModelRepository) {
+    val scope = rememberCoroutineScope()
+    val enabled by repo.settings.feature(option.key, option.default).collectAsState(initial = option.default)
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(option.title)
+            Text(option.description, style = MaterialTheme.typography.bodySmall)
+        }
+        Switch(checked = enabled, onCheckedChange = { value -> scope.launch { repo.settings.setFeature(option.key, value) } })
+    }
 }
 
 @Composable
@@ -150,6 +198,7 @@ fun SettingsScreen(
     onModels: () -> Unit,
     onNotes: () -> Unit,
     onHistory: () -> Unit,
+    onDiagnostics: () -> Unit,
     onWakeToggle: (on: Boolean, micOk: Boolean) -> Unit,
     onRequestMic: () -> Unit,
 ) {
@@ -167,7 +216,10 @@ fun SettingsScreen(
     val micOk = androidx.core.content.ContextCompat.checkSelfPermission(
         context, Manifest.permission.RECORD_AUDIO
     ) == PackageManager.PERMISSION_GRANTED
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         TextButton(onClick = onBack) { Text("< back") }
         Text("Settings", style = MaterialTheme.typography.headlineMedium)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -274,9 +326,37 @@ fun SettingsScreen(
                 scope.launch { repo.settings.setTranslationTarget(next.code) }
             }) { Text("target: ${current.name} (tap to change)") }
         }
+        Text("Assistant features (19)", style = MaterialTheme.typography.titleSmall)
+        Text("These controls are saved on this phone and take effect the next time listening starts.", style = MaterialTheme.typography.bodySmall)
+        featureOptions.forEach { FeatureSwitch(option = it, repo = repo) }
         OutlinedButton(onClick = onNotes, modifier = Modifier.fillMaxWidth()) { Text("Notes") }
         OutlinedButton(onClick = onHistory, modifier = Modifier.fillMaxWidth()) { Text("History") }
+        OutlinedButton(onClick = onDiagnostics, modifier = Modifier.fillMaxWidth()) { Text("Diagnostics") }
         OutlinedButton(onClick = onModels, modifier = Modifier.fillMaxWidth()) { Text("Models") }
+    }
+}
+
+@Composable
+private fun DiagnosticsScreen(repo: ModelRepository, state: AssistantState, onBack: () -> Unit) {
+    BackHandler(onBack = onBack)
+    val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val wakeOn by repo.settings.wakeOn.collectAsState(initial = false)
+    val historyOn by repo.settings.feature("save_history", true).collectAsState(initial = true)
+    val spokenOn by repo.settings.feature("spoken_replies", true).collectAsState(initial = true)
+    val micGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        TextButton(onClick = onBack) { Text("< back") }
+        Text("Diagnostics", style = MaterialTheme.typography.headlineMedium)
+        Text("Local-only health checks. No diagnostic data leaves the device.", style = MaterialTheme.typography.bodySmall)
+        Text("Assistant state: ${state.label}")
+        Text("Microphone permission: ${if (micGranted) "granted" else "missing"}")
+        Text("Wake listener: ${if (wakeOn) "enabled" else "disabled"}")
+        Text("Speech replies: ${if (spokenOn) "enabled" else "screen only"}")
+        Text("History storage: ${if (historyOn) "enabled" else "disabled"}")
+        Text("Audio guidance", style = MaterialTheme.typography.titleSmall)
+        Text("If music pauses, keep music coexistence enabled and restart the wake listener. If the mic is unavailable, check Bluetooth routing and Android microphone permission.", style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = { scope.launch { repo.history.clearAll() } }, modifier = Modifier.fillMaxWidth()) { Text("Delete all conversation history") }
     }
 }
 
@@ -303,44 +383,53 @@ fun AssistantScreen(
     onRelease: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(text = "Mercureal", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            text = "offline. on-device. nothing leaves this phone.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Text(text = "status: ${stateLabel(state)}", modifier = Modifier.padding(top = 16.dp))
-        Text(text = "say \"$wakePhrase\" when wake word is on in Settings", style = MaterialTheme.typography.bodySmall)
-        if (state.transcript.isNotBlank()) {
-            Text(text = "you: ${state.transcript}", modifier = Modifier.padding(top = 12.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Text(text = "Mercureal", style = MaterialTheme.typography.headlineMedium)
+                Text(text = "private voice assistant", style = MaterialTheme.typography.bodySmall)
+            }
+            TextButton(onClick = onOpenSettings) { Text("Settings") }
         }
-        if (state.reply.isNotBlank()) {
-            Text(text = "assistant: ${state.reply}", modifier = Modifier.padding(top = 12.dp))
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("${stateLabel(state).replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    if (state.session) "Conversation is open. You can ask a follow-up without repeating the wake phrase."
+                    else "Say \"$wakePhrase\" when wake word listening is enabled.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        if (state.transcript.isNotBlank() || state.reply.isNotBlank()) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (state.transcript.isNotBlank()) Text("You", style = MaterialTheme.typography.labelMedium)
+                    if (state.transcript.isNotBlank()) Text(state.transcript)
+                    if (state.reply.isNotBlank()) {
+                        HorizontalDivider()
+                        Text("Mercureal", style = MaterialTheme.typography.labelMedium)
+                        Text(state.reply)
+                    }
+                }
+            }
         }
         Button(
             onClick = {},
-            modifier = Modifier
-                .padding(top = 32.dp)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onPress = {
-                            onPress()
-                            tryAwaitRelease()
-                            onRelease()
-                        }
-                    )
-                },
-        ) {
-            Text("hold to talk")
+            modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
+                detectTapGestures(onPress = {
+                    onPress()
+                    tryAwaitRelease()
+                    onRelease()
+                })
+            },
+        ) { Text("Hold to talk") }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onDictate, modifier = Modifier.weight(1f)) { Text("Dictate") }
+            OutlinedButton(onClick = onOpenWake, modifier = Modifier.weight(1f)) { Text("Wake word") }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 16.dp)) {
-            OutlinedButton(onClick = onDictate) { Text("dictate") }
-        }
-        TextButton(onClick = onOpenSettings, modifier = Modifier.padding(top = 8.dp)) {
-            Text("Settings")
-        }
+        Text("Offline processing enabled. Audio and history stay on this phone.", style = MaterialTheme.typography.bodySmall)
     }
 }

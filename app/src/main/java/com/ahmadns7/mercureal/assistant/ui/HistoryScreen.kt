@@ -106,7 +106,7 @@ fun HistoryScreen(repo: ModelRepository, onBack: () -> Unit) {
                     }
                     group.sortedBy { it.timestamp }.forEach { t ->
                         Text("you: ${t.question}", style = MaterialTheme.typography.bodyMedium)
-                        Text("folk: ${t.answer}", style = MaterialTheme.typography.bodyMedium)
+                        Text("Mercureal: ${t.answer}", style = MaterialTheme.typography.bodyMedium)
                         Text(
                             "${fmt.format(Date(t.timestamp))} | ${t.mode}",
                             style = MaterialTheme.typography.bodySmall,
