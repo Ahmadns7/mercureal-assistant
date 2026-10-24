@@ -14,6 +14,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -167,7 +172,10 @@ fun SettingsScreen(
     val micOk = androidx.core.content.ContextCompat.checkSelfPermission(
         context, Manifest.permission.RECORD_AUDIO
     ) == PackageManager.PERMISSION_GRANTED
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         TextButton(onClick = onBack) { Text("< back") }
         Text("Settings", style = MaterialTheme.typography.headlineMedium)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -303,44 +311,53 @@ fun AssistantScreen(
     onRelease: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(text = "Mercureal", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            text = "offline. on-device. nothing leaves this phone.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Text(text = "status: ${stateLabel(state)}", modifier = Modifier.padding(top = 16.dp))
-        Text(text = "say \"$wakePhrase\" when wake word is on in Settings", style = MaterialTheme.typography.bodySmall)
-        if (state.transcript.isNotBlank()) {
-            Text(text = "you: ${state.transcript}", modifier = Modifier.padding(top = 12.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Text(text = "Mercureal", style = MaterialTheme.typography.headlineMedium)
+                Text(text = "private voice assistant", style = MaterialTheme.typography.bodySmall)
+            }
+            TextButton(onClick = onOpenSettings) { Text("Settings") }
         }
-        if (state.reply.isNotBlank()) {
-            Text(text = "assistant: ${state.reply}", modifier = Modifier.padding(top = 12.dp))
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("${stateLabel(state).replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    if (state.session) "Conversation is open. You can ask a follow-up without repeating the wake phrase."
+                    else "Say \"$wakePhrase\" when wake word listening is enabled.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        if (state.transcript.isNotBlank() || state.reply.isNotBlank()) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (state.transcript.isNotBlank()) Text("You", style = MaterialTheme.typography.labelMedium)
+                    if (state.transcript.isNotBlank()) Text(state.transcript)
+                    if (state.reply.isNotBlank()) {
+                        HorizontalDivider()
+                        Text("Mercureal", style = MaterialTheme.typography.labelMedium)
+                        Text(state.reply)
+                    }
+                }
+            }
         }
         Button(
             onClick = {},
-            modifier = Modifier
-                .padding(top = 32.dp)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onPress = {
-                            onPress()
-                            tryAwaitRelease()
-                            onRelease()
-                        }
-                    )
-                },
-        ) {
-            Text("hold to talk")
+            modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
+                detectTapGestures(onPress = {
+                    onPress()
+                    tryAwaitRelease()
+                    onRelease()
+                })
+            },
+        ) { Text("Hold to talk") }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onDictate, modifier = Modifier.weight(1f)) { Text("Dictate") }
+            OutlinedButton(onClick = onOpenWake, modifier = Modifier.weight(1f)) { Text("Wake word") }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 16.dp)) {
-            OutlinedButton(onClick = onDictate) { Text("dictate") }
-        }
-        TextButton(onClick = onOpenSettings, modifier = Modifier.padding(top = 8.dp)) {
-            Text("Settings")
-        }
+        Text("Offline processing enabled. Audio and history stay on this phone.", style = MaterialTheme.typography.bodySmall)
     }
 }
