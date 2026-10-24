@@ -89,7 +89,13 @@ class WakeWordService : Service() {
         }
         @Suppress("MissingPermission")
         val rec = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            // UNPROCESSED avoids Android voice-processing/audio-focus side effects that can duck
+            // or pause music while the wake listener is active. Older devices fall back safely.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                MediaRecorder.AudioSource.UNPROCESSED
+            } else {
+                MediaRecorder.AudioSource.VOICE_RECOGNITION
+            },
             WakeWordDetector.SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
@@ -130,6 +136,8 @@ class WakeWordService : Service() {
      * for longer than the capture window.
      */
     private fun onKeyword(rec: AudioRecord) {
+        // Keep the recorder alive after the keyword and give the user time to speak naturally.
+        // The previous six-second cap made the listener appear to stop mid-command.
         updateNotification("heard \"$currentPhrase\", listening")
         val buf = ByteArrayOutputStream()
         val minBuf = AudioRecord.getMinBufferSize(WakeWordDetector.SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -221,8 +229,8 @@ class WakeWordService : Service() {
         private const val CHANNEL_ID = "wake_word"
         private const val NOTIF_ID = 4217
         private const val ACTION_STOP = "com.ahmadns7.mercureal.assistant.wake.STOP"
-        private const val MAX_UTTERANCE_SECONDS = 6
-        private const val SILENCE_END_MS = 900
+        private const val MAX_UTTERANCE_SECONDS = 15
+        private const val SILENCE_END_MS = 1200
         private const val SILENCE_RMS = 500.0
 
         /** Restarts the listener so a new keyword line takes effect. No-op if it is not running. */

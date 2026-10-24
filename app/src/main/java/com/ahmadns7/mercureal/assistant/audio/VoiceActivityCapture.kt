@@ -35,7 +35,11 @@ class VoiceActivityCapture {
             SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
         )
         val rec = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                MediaRecorder.AudioSource.UNPROCESSED
+            } else {
+                MediaRecorder.AudioSource.VOICE_RECOGNITION
+            },
             SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,

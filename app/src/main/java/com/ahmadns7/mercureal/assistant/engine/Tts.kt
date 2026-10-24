@@ -73,7 +73,9 @@ class Tts(private val context: Context, private val store: ModelStore) {
         val t = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    // Do not claim assistant focus: wake listening and spoken replies should
+                    // coexist with music instead of pausing or ducking the active player.
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build(),
             )
