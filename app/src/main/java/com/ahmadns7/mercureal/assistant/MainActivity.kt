@@ -116,6 +116,7 @@ class MainActivity : ComponentActivity() {
                             onModels = { screen = Screen.Models },
                             onNotes = { screen = Screen.Notes },
                             onHistory = { screen = Screen.History },
+                            onDiagnostics = { screen = Screen.Diagnostics },
                             onWakeToggle = { on, micOk ->
                                 if (on && micOk) WakeWordService.start(applicationContext)
                                 else WakeWordService.stop(applicationContext)
@@ -134,6 +135,11 @@ class MainActivity : ComponentActivity() {
                             repo = repo,
                             onBack = { screen = Screen.Settings },
                         )
+                        Screen.Diagnostics -> DiagnosticsScreen(
+                            repo = repo,
+                            state = assistant.state,
+                            onBack = { screen = Screen.Settings },
+                        )
                     }
                 }
             }
@@ -145,7 +151,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private enum class Screen { Home, Settings, Models, Notes, History }
+    private enum class Screen { Home, Settings, Models, Notes, History, Diagnostics }
 }
 
 private data class FeatureOption(val key: String, val title: String, val description: String, val default: Boolean = false)
@@ -192,6 +198,7 @@ fun SettingsScreen(
     onModels: () -> Unit,
     onNotes: () -> Unit,
     onHistory: () -> Unit,
+    onDiagnostics: () -> Unit,
     onWakeToggle: (on: Boolean, micOk: Boolean) -> Unit,
     onRequestMic: () -> Unit,
 ) {
@@ -324,7 +331,32 @@ fun SettingsScreen(
         featureOptions.forEach { FeatureSwitch(option = it, repo = repo) }
         OutlinedButton(onClick = onNotes, modifier = Modifier.fillMaxWidth()) { Text("Notes") }
         OutlinedButton(onClick = onHistory, modifier = Modifier.fillMaxWidth()) { Text("History") }
+        OutlinedButton(onClick = onDiagnostics, modifier = Modifier.fillMaxWidth()) { Text("Diagnostics") }
         OutlinedButton(onClick = onModels, modifier = Modifier.fillMaxWidth()) { Text("Models") }
+    }
+}
+
+@Composable
+private fun DiagnosticsScreen(repo: ModelRepository, state: AssistantState, onBack: () -> Unit) {
+    BackHandler(onBack = onBack)
+    val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val wakeOn by repo.settings.wakeOn.collectAsState(initial = false)
+    val historyOn by repo.settings.feature("save_history", true).collectAsState(initial = true)
+    val spokenOn by repo.settings.feature("spoken_replies", true).collectAsState(initial = true)
+    val micGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        TextButton(onClick = onBack) { Text("< back") }
+        Text("Diagnostics", style = MaterialTheme.typography.headlineMedium)
+        Text("Local-only health checks. No diagnostic data leaves the device.", style = MaterialTheme.typography.bodySmall)
+        Text("Assistant state: ${state.label}")
+        Text("Microphone permission: ${if (micGranted) "granted" else "missing"}")
+        Text("Wake listener: ${if (wakeOn) "enabled" else "disabled"}")
+        Text("Speech replies: ${if (spokenOn) "enabled" else "screen only"}")
+        Text("History storage: ${if (historyOn) "enabled" else "disabled"}")
+        Text("Audio guidance", style = MaterialTheme.typography.titleSmall)
+        Text("If music pauses, keep music coexistence enabled and restart the wake listener. If the mic is unavailable, check Bluetooth routing and Android microphone permission.", style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = { scope.launch { repo.history.clearAll() } }, modifier = Modifier.fillMaxWidth()) { Text("Delete all conversation history") }
     }
 }
 
