@@ -39,7 +39,7 @@ Say "remember that <note>" to save a note on this phone. Say "what do you rememb
 - Downloads are fetched over HTTPS from pinned Hugging Face commits. Each file must match its pinned size and sha256 before it is accepted. Interrupted or cancelled downloads keep their partial file and resume from it on the next attempt (HTTP Range). A size or checksum mismatch deletes the partial file.
 - Models are stored in the app's private internal storage (filesDir/models), not on external or shared storage. Delete a model in Settings > Models to free its space.
 
-Status: v0.3.0 (device commands, widget, quick settings tile added). Models screen added, resumable model downloads. The native pins and Kotlin/JNI signatures were reviewed statically, but the app has NOT been compiled with the Android toolchain or run on a device yet. Expect first-build friction.
+Status: v0.2.0 (device commands, widget, quick settings tile added). Models screen added, resumable model downloads. The app builds in CI; it has not yet been run on a device. Expect first-build friction.
 
 ## Stack
 - Kotlin + Jetpack Compose UI (push-to-talk, minSdk 26, arm64-v8a)
