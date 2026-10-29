@@ -67,9 +67,11 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Falls back to debug signing when no release keystore is configured, so CI still builds.
-            signingConfig = if (signingConfigs.getByName("release").storeFile != null)
-                signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            // CI may explicitly request an unsigned release when no release keystore is available.
+            if (System.getenv("MERCUREAL_UNSIGNED_RELEASE") != "true") {
+                signingConfig = if (signingConfigs.getByName("release").storeFile != null)
+                    signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            }
         }
     }
 
